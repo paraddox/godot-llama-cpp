@@ -67,7 +67,7 @@ size_t KVCacheManager::create_sequence(const std::vector<llama_token>& initial_t
     entry.sequence_id = seq_id;
     entry.start_position = 0;
     entry.length = initial_tokens.size();
-    entry.last_access_time = Time::get_singleton()->get_time_msec_from_system();
+    entry.last_access_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     entry.active = true;
     
     cache_entries[seq_id] = entry;
@@ -107,7 +107,7 @@ bool KVCacheManager::append_to_sequence(size_t seq_id, const std::vector<llama_t
     // Append tokens to the sequence
     entry.tokens.insert(entry.tokens.end(), tokens.begin(), tokens.end());
     entry.length = new_length;
-    entry.last_access_time = Time::get_singleton()->get_time_msec_from_system();
+    entry.last_access_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     current_memory_usage += additional_memory;
     
     cache_mutex->unlock();
@@ -138,7 +138,7 @@ bool KVCacheManager::truncate_sequence(size_t seq_id, size_t new_length) {
     
     entry.tokens.resize(new_length);
     entry.length = new_length;
-    entry.last_access_time = Time::get_singleton()->get_time_msec_from_system();
+    entry.last_access_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     current_memory_usage -= freed_memory;
     
     cache_mutex->unlock();
@@ -244,7 +244,7 @@ size_t KVCacheManager::fork_sequence(size_t parent_seq_id, size_t fork_position)
         new_entry.sequence_id = new_seq_id;
         new_entry.start_position = 0;
         new_entry.length = fork_position;
-        new_entry.last_access_time = Time::get_singleton()->get_time_msec_from_system();
+        new_entry.last_access_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
         new_entry.active = true;
         
         cache_entries[new_seq_id] = new_entry;
@@ -327,14 +327,14 @@ bool KVCacheManager::copy_sequence_range(size_t src_seq_id, size_t dst_seq_id,
 void KVCacheManager::update_access_time(size_t seq_id) {
     auto it = cache_entries.find(seq_id);
     if (it != cache_entries.end()) {
-        it->second.last_access_time = Time::get_singleton()->get_time_msec_from_system();
+        it->second.last_access_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     }
 }
 
 void KVCacheManager::cleanup_inactive_sequences() {
     cache_mutex->lock();
     
-    uint64_t current_time = Time::get_singleton()->get_time_msec_from_system();
+    uint64_t current_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     uint64_t timeout_ms = 300000; // 5 minutes
     
     std::vector<size_t> to_remove;

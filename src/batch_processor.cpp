@@ -77,7 +77,7 @@ int BatchProcessor::submit_request(const String& prompt, int32_t max_tokens) {
     req->id = request_id;
     req->prompt = prompt;
     req->max_tokens = max_tokens;
-    req->submit_time_ms = Time::get_singleton()->get_time_msec_from_system();
+    req->submit_time_ms = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     
     // Tokenize prompt
     const char* text = prompt.utf8().get_data();
@@ -110,7 +110,7 @@ void BatchProcessor::process_pending_requests() {
     
     // Create new batch group
     BatchGroup* batch = create_batch_group();
-    uint64_t current_time = Time::get_singleton()->get_time_msec_from_system();
+    uint64_t current_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     
     // Fill batch with pending requests
     while (!pending_requests.empty() && batch->requests.size() < max_batch_size) {
@@ -145,7 +145,7 @@ void BatchProcessor::process_pending_requests() {
 
 BatchGroup* BatchProcessor::create_batch_group() {
     BatchGroup* batch = new BatchGroup();
-    batch->creation_time_ms = Time::get_singleton()->get_time_msec_from_system();
+    batch->creation_time_ms = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     return batch;
 }
 
@@ -159,7 +159,7 @@ void BatchProcessor::add_request_to_batch(BatchRequest* req, BatchGroup* batch) 
 bool BatchProcessor::should_process_batch(BatchGroup* batch) {
     if (batch->requests.empty()) return false;
     
-    uint64_t current_time = Time::get_singleton()->get_time_msec_from_system();
+    uint64_t current_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     uint64_t batch_age = current_time - batch->creation_time_ms;
     
     // Process if batch is full, timeout reached, or minimum size met
@@ -171,7 +171,7 @@ bool BatchProcessor::should_process_batch(BatchGroup* batch) {
 void BatchProcessor::process_batch_group(BatchGroup* batch) {
     if (batch->requests.empty()) return;
     
-    uint64_t start_time = Time::get_singleton()->get_time_msec_from_system();
+    uint64_t start_time = (uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
     
     // Prepare consolidated batch for all requests
     std::vector<llama_token> batch_tokens;
@@ -257,7 +257,8 @@ void BatchProcessor::process_batch_group(BatchGroup* batch) {
     processor_mutex->unlock();
     
     // Update performance stats
-    uint64_t processing_time = Time::get_singleton()->get_time_msec_from_system() - start_time;
+    uint64_t current_time = (uint64_t)(uint64_t)Time::get_singleton()->get_time_dict_from_system()["unix"];
+    uint64_t processing_time = current_time - start_time;
     total_requests_processed.fetch_add(batch->requests.size());
     total_processing_time_ms.fetch_add(processing_time);
     

@@ -9,6 +9,9 @@
 #include <llama.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
+#ifdef GGML_USE_CUDA
+#include <ggml-cuda.h>
+#endif
 #include "llama_model.h"
 #include "llama_model_loader.h"
 #include "llama_context.h"
@@ -29,6 +32,32 @@ void initialize_types(ModuleInitializationLevel p_level)
 		
 		// Load backends (CPU and GPU backends should be auto-registered)
 		ggml_backend_load_all();
+		
+		// Explicitly try to register CUDA backend if available
+#ifdef GGML_USE_CUDA
+		UtilityFunctions::print("GGML_USE_CUDA is defined - checking CUDA availability...");
+		int cuda_device_count = ggml_backend_cuda_get_device_count();
+		UtilityFunctions::print(vformat("ggml_backend_cuda_get_device_count() returned: %d", cuda_device_count));
+		if (cuda_device_count > 0) {
+			UtilityFunctions::print(vformat("🚀 CUDA devices detected: %d", cuda_device_count));
+			
+			// Get CUDA device info
+			for (int i = 0; i < cuda_device_count; i++) {
+				char desc[256];
+				ggml_backend_cuda_get_device_description(i, desc, sizeof(desc));
+				
+				size_t free_mem, total_mem;
+				ggml_backend_cuda_get_device_memory(i, &free_mem, &total_mem);
+				
+				UtilityFunctions::print(vformat("  Device %d: %s (%d MB total, %d MB free)", 
+					i, String(desc), (int)(total_mem/1024/1024), (int)(free_mem/1024/1024)));
+			}
+		} else {
+			UtilityFunctions::print("❌ No CUDA devices detected by ggml_backend_cuda_get_device_count()");
+		}
+#else
+		UtilityFunctions::print("⚠️  GGML_USE_CUDA not defined - CUDA support not compiled");
+#endif
 		
 		// Detailed backend detection and reporting
 		size_t backend_count = ggml_backend_reg_count();

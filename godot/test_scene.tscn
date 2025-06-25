@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3 uid="uid://b3y8k2v1nqhqd"]
+
+[ext_resource type="Script" path="res://test_scene.gd" id="1_8y4k5"]
+
+[node name="TestScene" type="Node"]
+script = ExtResource("1_8y4k5")
+
+[node name="Label" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -100.0
+offset_right = 200.0
+offset_bottom = 100.0
+text = "Performance Architecture Test
+
+Check the console output for detailed test results.
+
+This scene tests:
+• Extension loading
+• Context creation  
+• Pool configuration
+• Batch configuration
+• Speculative configuration
+
+Results will appear in the Godot output console."
+horizontal_alignment = 1
+vertical_alignment = 1
