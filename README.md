@@ -9,7 +9,8 @@ Run large language models in [Godot](https://godotengine.org). Powered by [llama
 <br />
 <br />
 
-![Godot v4.2](https://img.shields.io/badge/Godot-v4.2-%23478cbf?logo=godot-engine&logoColor=white)
+![Godot v4.2+](https://img.shields.io/badge/Godot-v4.2%2B-%23478cbf?logo=godot-engine&logoColor=white)
+![Build System](https://img.shields.io/badge/Build-CMake-%23064F8C?logo=cmake&logoColor=white)
 ![GitHub last commit](https://img.shields.io/github/last-commit/hazelnutcloud/godot-llama-cpp)
 ![GitHub License](https://img.shields.io/github/license/hazelnutcloud/godot-llama-cpp)
 
@@ -37,43 +38,126 @@ while (true):
 ```
 
 ## Features
-  - Platform and compute backend support:
-    | Platform | CPU | Metal | Vulkan | CUDA |
-    |----------|-----|-------|--------|------|
-    | macOS    | ✅  | ✅    | ❌     | ❌   |
-    | Linux    | ✅  | ❌    | ✅     | 🚧   |
-    | Windows  | ✅  | ❌    | 🚧     | 🚧   |
-  - Asynchronous completion generation
-  - Support any language model that llama.cpp supports in GGUF format
-  - GGUF files are Godot resources
+  - **🎯 Stable CMake Build System** - Migrated from Zig for better compatibility
+  - **🔧 Modern llama.cpp Integration** - Uses official build configuration
+  - **⚡ Configurable Deployment** - Flexible addon installation paths
+  - **🔄 Asynchronous Completion Generation** - Non-blocking text generation
+  - **📦 GGUF Resource Support** - Model files as native Godot resources
+  - **🌐 Cross-Platform Compatibility** - Support for multiple operating systems
+  
+  ### Platform & Compute Backend Support:
+  | Platform | CPU | Metal | Vulkan | CUDA |
+  |----------|-----|-------|--------|------|
+  | macOS    | ✅  | ✅    | ❌     | ❌   |
+  | Linux    | ✅  | ❌    | ✅     | 🚧   |
+  | Windows  | ✅  | ❌    | 🚧     | 🚧   |
 
 ## Roadmap
-  - [ ] Chat completions support via dedicated library for jinja2 templating in zig
-  - [ ] Grammar support
-  - [ ] Multimodal models support
-  - [ ] Embeddings
-  - [ ] Vector database using LibSQL
+  - [ ] Chat completions support with better template handling
+  - [ ] Grammar support (JSON, structured output)
+  - [ ] Multimodal models support (vision, audio)
+  - [ ] Embeddings generation
+  - [ ] Vector database integration
+  - [ ] Streaming performance optimizations
+  - [ ] GPU backend improvements (CUDA, Vulkan)
 
 ## Building & Installation
 
-1. Download zig v0.13.0 from https://ziglang.org/download/
-2. Clone the repository:
+> **🎯 NEW: Now uses CMake build system for better stability and compatibility!**
+
+### Prerequisites
+- **CMake** (3.14 or higher)
+- **Python 3** (for binding generation)
+- **C++ compiler** with C++17 support
+- **Git** (for submodules)
+
+### Installation Steps
+
+1. **Clone the repository:**
    ```bash
    git clone --recurse-submodules https://github.com/hazelnutcloud/godot-llama-cpp.git
-   ```
-3. Copy the `godot-llama-cpp` addon folder in `godot/addons` to your Godot project's `addons` folder.
-   ```bash
-    cp -r godot-llama-cpp/godot/addons/godot-llama-cpp <your_project>/addons
-   ```
-4. Build the extension and install it in your Godot project:
-   ```bash
    cd godot-llama-cpp
-   zig build --prefix <your_project>/addons/godot-llama-cpp
    ```
-5. Enable the plugin in your Godot project settings.
-6. Add the `LlamaContext` node to your scene.
-7. Run your Godot project.
-8. Enjoy!
+
+2. **Build the extension:**
+   ```bash
+   # For default demo project
+   mkdir build && cd build
+   cmake ..
+   make -j$(nproc)
+   
+   # OR for your custom project
+   mkdir build && cd build
+   cmake -DADDON_OUTPUT_DIR=/path/to/your-project/addons/godot-llama-cpp ..
+   make -j$(nproc)
+   ```
+
+3. **Copy addon to your project** (if not using custom output):
+   ```bash
+   cp -r godot/addons/godot-llama-cpp /path/to/your-project/addons/
+   ```
+
+4. **Enable the plugin** in your Godot project settings.
+
+5. **Add the `LlamaContext` node** to your scene.
+
+6. **Run your project** and enjoy!
+
+### Build Examples
+
+```bash
+# Build for current demo project
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+
+# Build for external project
+mkdir build && cd build
+cmake -DADDON_OUTPUT_DIR=$HOME/my-game/addons/godot-llama-cpp ..
+make -j$(nproc)
+
+# Build Debug version (larger but with symbols)
+cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j$(nproc)
+```
+
+### Legacy Zig Build (Deprecated)
+
+The old Zig build system has been replaced due to SIGILL crashes. Use CMake instead:
+```bash
+# ❌ OLD (causes crashes)
+zig build --prefix <project>/addons/godot-llama-cpp
+
+# ✅ NEW (stable)
+cmake -DADDON_OUTPUT_DIR=<project>/addons/godot-llama-cpp .. && make
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Extension fails to load:**
+- Ensure both Debug and Release versions are built
+- Check that the `.gdextension` file paths match your built libraries
+- Verify CMake build completed without errors
+
+**Build failures:**
+- Install CMake 3.14+ and Python 3
+- Ensure submodules are initialized: `git submodule update --init --recursive`
+- Check that you have a C++17 compatible compiler
+
+**Performance issues:**
+- Use Release build for production: `cmake -DCMAKE_BUILD_TYPE=Release ..`
+- Consider GPU backends for supported platforms
+- Ensure model files are in GGUF format
+
+**SIGILL crashes (old Zig builds):**
+- Migrate to CMake build system (this resolves CPU instruction compatibility issues)
+- Remove old Zig-built libraries and rebuild with CMake
+
+### Getting Help
+
+- Check [CLAUDE.md](CLAUDE.md) for detailed technical documentation
+- Report issues on the GitHub repository
+- Include build logs and system information when reporting bugs
 
 ## License
 
