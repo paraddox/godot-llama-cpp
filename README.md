@@ -92,6 +92,11 @@ while (true):
    make -j$(nproc)
    ```
 
+   **Available build targets:**
+   - `make -j$(nproc)` - Build extension (copies only when rebuilt)
+   - `make install-extension` - Ensure extension is built and copied
+   - `make force-install` - **Force copy existing libraries** (always copies)
+
 3. **Copy addon to your project** (if not using custom output):
    ```bash
    cp -r godot/addons/godot-llama-cpp /path/to/your-project/addons/
@@ -117,6 +122,12 @@ make -j$(nproc)
 
 # Build Debug version (larger but with symbols)
 cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j$(nproc)
+
+# Force copy libraries without rebuilding
+make force-install
+
+# Ensure libraries are built and copied
+make install-extension
 ```
 
 ### Legacy Zig Build (Deprecated)

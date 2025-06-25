@@ -24,6 +24,11 @@ make -j$(nproc)
 mkdir build && cd build  
 cmake -DADDON_OUTPUT_DIR=/home/user/my-game/addons/godot-llama-cpp ..
 make -j$(nproc)
+
+# Available targets:
+make -j$(nproc)         # Build extension (copies only when rebuilt)
+make install-extension  # Ensure extension is built and copied
+make force-install      # Force copy existing libraries (always copies)
 ```
 
 **Legacy Zig Build (Deprecated):**

@@ -72,14 +72,20 @@ add_custom_target(generate_bindings
     DEPENDS ${CMAKE_BINARY_DIR}/gen/include/godot_cpp/classes/global_constants.hpp
 )
 
-# Collect godot-cpp source files
+# Collect godot-cpp source files (both original and generated)
 file(GLOB_RECURSE GODOT_CPP_SOURCES 
     "godot_cpp/src/*.cpp"
     "godot_cpp/src/*.c"
 )
 
+# Collect generated binding sources
+file(GLOB_RECURSE GODOT_CPP_GENERATED_SOURCES 
+    "${CMAKE_BINARY_DIR}/gen/src/*.cpp"
+    "${CMAKE_BINARY_DIR}/gen/src/*.c"
+)
+
 # Create godot-cpp static library
-add_library(godot-cpp STATIC ${GODOT_CPP_SOURCES})
+add_library(godot-cpp STATIC ${GODOT_CPP_SOURCES} ${GODOT_CPP_GENERATED_SOURCES})
 add_dependencies(godot-cpp generate_bindings)
 
 target_include_directories(godot-cpp PRIVATE
@@ -166,4 +172,19 @@ add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo 
             "✅ Extension built successfully: ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>"
     COMMENT "Build complete"
+)
+
+# Add install target for convenience
+add_custom_target(install-extension
+    DEPENDS ${EXTENSION_NAME}
+    COMMENT "Ensure extension is built and copied to addon directory"
+)
+
+# Add force-install target that always copies existing libraries  
+add_custom_target(force-install
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${ADDON_OUTPUT_DIR}/lib
+    COMMAND ${CMAKE_COMMAND} -E echo "Force copying libraries to ${ADDON_OUTPUT_DIR}/lib/..."
+    COMMAND bash -c "cp ${CMAKE_BINARY_DIR}/libgodot-llama-cpp-*.so ${ADDON_OUTPUT_DIR}/lib/ || echo 'No libraries found to copy'"
+    COMMAND ${CMAKE_COMMAND} -E echo "✅ Force copy complete"
+    COMMENT "Force copy existing libraries to addon directory"
 )
