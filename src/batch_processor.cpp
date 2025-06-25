@@ -1,5 +1,5 @@
 #include "batch_processor.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include <godot_cpp/classes/time.hpp>
 #include <algorithm>
 #include <cstring>

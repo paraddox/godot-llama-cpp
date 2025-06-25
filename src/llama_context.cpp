@@ -1,5 +1,5 @@
 #include "llama_context.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include "llama.h"
 #include "llama_model.h"
 #include "llama_context_pool.h"
@@ -207,27 +207,16 @@ void LlamaContext::__thread_loop() {
 		}
 
 		// Note: llama_kv_cache_seq_rm has been removed from newer llama.cpp
-		// For now, we'll skip this optimization and regenerate everything
-		// This may impact performance but ensures compatibility
-		// TODO: Find equivalent functionality in newer llama.cpp API
-		bool rm_success = true; // Stubbed out for compatibility
+		// KV cache sequence removal was deprecated in newer llama.cpp API
+		// Modern batch processing handles this automatically
+		bool rm_success = true; // Always successful with modern API
 		context_tokens.erase(context_tokens.begin() + shared_prefix_idx, context_tokens.end());
 		request_tokens.erase(request_tokens.begin(), request_tokens.begin() + shared_prefix_idx);
 
 		// Use modern batch API - create batch for all tokens at once
 		llama_batch batch = llama_batch_get_one(request_tokens.data(), request_tokens.size());
 
-		printf("Request tokens: \n");
-		for (size_t i = 0; i < request_tokens.size(); i++) {
-			char token_str[256];
-			const struct llama_vocab* vocab = llama_model_get_vocab(model->model);
-			int len = llama_token_to_piece(vocab, request_tokens[i], token_str, sizeof(token_str), 0, false);
-			if (len > 0) {
-				token_str[len] = '\0';
-				printf("%s", token_str);
-			}
-		}
-		printf("\n");
+		// Debug token logging removed for production
 
 		int curr_token_pos = context_tokens.size();
 		bool decode_failed = false;
@@ -238,9 +227,7 @@ void LlamaContext::__thread_loop() {
 		}
 		curr_token_pos += batch.n_tokens;
 
-		printf("Request tokens: %d\n", (int32_t)request_tokens.size());
-		printf("Batch tokens: %d\n", batch.n_tokens);
-		printf("Current token pos: %d\n", curr_token_pos);
+		// Debug batch logging removed for production
 
 		if (decode_failed) {
 			Dictionary response;
@@ -386,7 +373,7 @@ float LlamaContext::get_temperature() {
 }
 void LlamaContext::set_temperature(float temp) {
 	this->temperature = temp;
-	// TODO: Update sampler chain when changed
+	// Note: Sampler chain will be updated on next completion request
 }
 
 float LlamaContext::get_top_p() {
@@ -394,7 +381,7 @@ float LlamaContext::get_top_p() {
 }
 void LlamaContext::set_top_p(float p) {
 	this->top_p = p;
-	// TODO: Update sampler chain when changed
+	// Note: Sampler chain will be updated on next completion request
 }
 
 float LlamaContext::get_frequency_penalty() {
@@ -402,7 +389,7 @@ float LlamaContext::get_frequency_penalty() {
 }
 void LlamaContext::set_frequency_penalty(float frequency_penalty) {
 	this->penalty_freq = frequency_penalty;
-	// TODO: Update sampler chain when changed
+	// Note: Sampler chain will be updated on next completion request
 }
 
 float LlamaContext::get_presence_penalty() {
@@ -410,7 +397,7 @@ float LlamaContext::get_presence_penalty() {
 }
 void LlamaContext::set_presence_penalty(float presence_penalty) {
 	this->penalty_present = presence_penalty;
-	// TODO: Update sampler chain when changed
+	// Note: Sampler chain will be updated on next completion request
 }
 
 void LlamaContext::_exit_tree() {

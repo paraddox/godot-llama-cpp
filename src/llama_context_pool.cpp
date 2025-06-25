@@ -1,6 +1,6 @@
 #include "llama_context_pool.h"
 #include "batch_processor.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <algorithm>

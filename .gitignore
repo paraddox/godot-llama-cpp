@@ -87,3 +87,18 @@ llama_test_project/
 
 # Godot editor metadata files
 *.uid
+
+# Python cache and temporary files
+__pycache__/
+*.pyc
+*~
+*.bak
+*.swp
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Editor backup files
+*.orig
+*.rej

@@ -1,5 +1,5 @@
 #include "speculative_decoder.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include <algorithm>
 #include <random>
 #include <cmath>

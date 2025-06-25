@@ -2,7 +2,7 @@
 #define LLAMA_CONTEXT_H
 
 #include "llama.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include "llama_model.h"
 #include "llama_context_pool.h"
 #include <godot_cpp/classes/mutex.hpp>

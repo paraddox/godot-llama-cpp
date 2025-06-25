@@ -1,5 +1,5 @@
 #include "kv_cache_manager.h"
-#include "common.h"
+#include "../llama.cpp/common/common.h"
 #include <godot_cpp/classes/time.hpp>
 #include <algorithm>
 #include <numeric>
