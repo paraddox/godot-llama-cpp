@@ -54,6 +54,14 @@ compile_commands.json
 zig-out
 *.gguf
 
+# CMake build artifacts
+build/
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+compile_commands.json
+Makefile
+
 godot/addons/godot-llama-cpp/lib/*
 
 # Test directories and projects
