@@ -45,6 +45,7 @@ void LlamaContext::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_n_len", "n_len"), &LlamaContext::set_n_len);
 	ClassDB::add_property("LlamaContext", PropertyInfo(Variant::INT, "n_len"), "set_n_len", "get_n_len");
 
+	ClassDB::bind_method(D_METHOD("initialize_context"), &LlamaContext::initialize_context);
 	ClassDB::bind_method(D_METHOD("request_completion", "prompt"), &LlamaContext::request_completion);
 	ClassDB::bind_method(D_METHOD("__thread_loop"), &LlamaContext::__thread_loop);
 
@@ -54,8 +55,11 @@ void LlamaContext::_bind_methods() {
 LlamaContext::LlamaContext() {
 	ctx_params = llama_context_default_params();
 	ctx_params.n_ctx = 4096;
+	ctx_params.n_batch = 2048;
+	ctx_params.n_ubatch = 512;
+	ctx_params.no_perf = false;
 
-	int32_t n_threads = OS::get_singleton()->get_processor_count();
+	int32_t n_threads = std::min(8, (int)OS::get_singleton()->get_processor_count());
 	ctx_params.n_threads = n_threads;
 	ctx_params.n_threads_batch = n_threads;
 
@@ -72,24 +76,57 @@ void LlamaContext::_enter_tree() {
 		return;
 	}
 
-	if (model == nullptr) {
-		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, model property is null", __func__));
+	// Don't initialize here - wait for explicit call after model is loaded
+	// This avoids the race condition where model isn't ready yet
+}
+
+void LlamaContext::initialize_context() {
+	UtilityFunctions::print("initialize_context: Starting context initialization");
+	
+	// Skip initialization in editor mode
+	if (Engine::get_singleton()->is_editor_hint()) {
+		UtilityFunctions::print("initialize_context: In editor mode, skipping");
 		return;
 	}
 
-	if (model->model == NULL) {
-		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, model not loaded", __func__));
+	if (model == nullptr) {
+		UtilityFunctions::printerr("initialize_context: Failed - model property is null");
 		return;
 	}
+
+	UtilityFunctions::print("initialize_context: Model property is set, checking if model is loaded");
+	if (model->model == NULL) {
+		UtilityFunctions::printerr("initialize_context: Failed - model not loaded (model->model is NULL)");
+		return;
+	}
+	
+	UtilityFunctions::print("initialize_context: Model is loaded, proceeding with context init");
 
 	mutex.instantiate();
 	semaphore.instantiate();
 	thread.instantiate();
 
-	llama_backend_init();
-	llama_numa_init(ggml_numa_strategy::GGML_NUMA_STRATEGY_DISABLED);
-
-	ctx = llama_init_from_model(model->model, ctx_params);
+	// Backend is already initialized globally, no need to do it again
+	// Try minimal context parameters first to avoid SIGILL
+	llama_context_params minimal_params = llama_context_default_params();
+	minimal_params.n_ctx = 512;  // Very small context
+	minimal_params.n_batch = 32;  // Small batch
+	minimal_params.n_ubatch = 32;  // Small ubatch  
+	minimal_params.n_threads = 1;  // Single thread
+	minimal_params.n_threads_batch = 1;
+	minimal_params.no_perf = true;  // Disable performance counters
+	
+	UtilityFunctions::print(vformat("initialize_context: Creating minimal context with n_ctx=%d, n_threads=%d", minimal_params.n_ctx, minimal_params.n_threads));
+	UtilityFunctions::print("initialize_context: About to call llama_init_from_model...");
+	
+	// Try catch the crash point more precisely
+	try {
+		ctx = llama_init_from_model(model->model, minimal_params);
+		UtilityFunctions::print("initialize_context: llama_init_from_model completed successfully");
+	} catch (...) {
+		UtilityFunctions::printerr("initialize_context: Exception caught during llama_init_from_model");
+		return;
+	}
 	if (ctx == NULL) {
 		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, null ctx", __func__));
 		return;

@@ -13,15 +13,10 @@ PackedStringArray LlamaModelLoader::_get_recognized_extensions() const {
 }
 
 Variant godot::LlamaModelLoader::_load(const String &path, const String &original_path, bool use_sub_threads, int32_t cache_mode) const {
+	// Never auto-load models - always create empty resource
+	// This prevents race conditions with premature loading
 	Ref<LlamaModel> model = memnew(LlamaModel);
-
-	if (!FileAccess::file_exists(path)) {
-		return ERR_FILE_NOT_FOUND;
-	}
-
-  model->set_path(path);
-  model->load_model();
-	
+	model->set_path(path);
 	return { model };
 }
 

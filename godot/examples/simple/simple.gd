@@ -10,10 +10,18 @@ func _ready():
 	if llama_context.model == null:
 		print("Loading Phi-3 Mini model...")
 		var llama_model = LlamaModel.new()
-		llama_model.resource_path = "res://models/Phi-3-mini-4k-instruct-q4.gguf"
+		# Set path manually without triggering resource loader
+		llama_model.set_path("res://models/Phi-3-mini-4k-instruct-q4.gguf")
 		llama_model.load_model()
-		llama_context.model = llama_model
-		print("Model loaded successfully")
+		
+		# Check if model actually loaded
+		if llama_model.is_loaded():
+			llama_context.model = llama_model
+			# Initialize context after model is loaded
+			llama_context.initialize_context()
+			print("Model and context loaded successfully")
+		else:
+			print("ERROR: Failed to load model")
 
 func _on_text_edit_submit(input: String) -> void:
 	handle_input(input)

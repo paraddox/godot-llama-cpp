@@ -46,7 +46,8 @@ protected:
 public:
 	void set_model(const Ref<LlamaModel> model);
 	Ref<LlamaModel> get_model();
-
+	
+	void initialize_context();
 	int request_completion(const String &prompt);
 	void __thread_loop();
 

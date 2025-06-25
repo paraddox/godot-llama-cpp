@@ -105,6 +105,15 @@ pub fn build(b: *std.Build) !void {
 
     try c_flags.append("-std=c11");
     try cpp_flags.append("-std=c++17");
+    
+    // Essential defines for llama.cpp
+    try base_flags.append("-DGGML_USE_CPU");
+    
+    // Disable potentially problematic CPU optimizations for compatibility
+    try base_flags.append("-DGGML_NO_ACCELERATE");
+    try base_flags.append("-DGGML_NO_OPENMP");
+    try base_flags.append("-march=x86-64");  // Use baseline x86-64 instructions only
+    
     try include_paths.appendSlice(&.{
         b.path("llama.cpp/src"),
         b.path("llama.cpp/include"),
