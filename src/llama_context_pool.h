@@ -4,6 +4,7 @@
 #include "llama.h"
 #include "llama_model.h"
 #include "batch_processor.h"
+#include "speculative_decoder.h"
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/semaphore.hpp>
@@ -20,12 +21,14 @@ struct PooledContext {
     llama_context* ctx = nullptr;
     struct llama_sampler* sampler = nullptr;
     BatchProcessor* batch_processor = nullptr;
+    SpeculativeDecoder* speculative_decoder = nullptr;
     std::vector<llama_token> context_tokens;
     std::atomic<bool> busy{false};
     std::atomic<int> request_count{0};
     uint32_t context_id;
     bool healthy = true;
     bool batch_mode = true;
+    bool speculative_mode = false;
 };
 
 struct ContextRequest {
@@ -54,6 +57,7 @@ private:
     uint32_t pool_size;
     llama_context_params base_params;
     bool batch_mode_enabled = true;
+    bool speculative_mode_enabled = false;
 
     PooledContext* acquire_context();
     void release_context(PooledContext* ctx);
@@ -77,6 +81,14 @@ public:
     void set_batch_size(uint32_t min_size, uint32_t max_size);
     void set_batch_timeout(uint32_t timeout_ms);
     void process_batched_requests();
+    
+    // Speculative decoding controls
+    void set_speculative_mode(bool enabled);
+    bool get_speculative_mode() const;
+    void set_lookahead_tokens(uint32_t tokens);
+    uint32_t get_lookahead_tokens() const;
+    void set_acceptance_threshold(float threshold);
+    float get_acceptance_threshold() const;
     
     // Performance monitoring
     struct PoolStats {

@@ -66,6 +66,19 @@ bool LlamaContextPool::initialize(Ref<LlamaModel> p_model, uint32_t p_pool_size)
             }
         }
         
+        // Initialize speculative decoder for this context
+        if (speculative_mode_enabled) {
+            ctx->speculative_decoder = new SpeculativeDecoder();
+            if (!ctx->speculative_decoder->initialize(model, ctx->ctx)) {
+                UtilityFunctions::printerr(vformat("LlamaContextPool: Failed to initialize speculative decoder for context %d", i));
+                delete ctx->speculative_decoder;
+                ctx->speculative_decoder = nullptr;
+                ctx->speculative_mode = false;
+            } else {
+                ctx->speculative_mode = true;
+            }
+        }
+        
         contexts.set(i, ctx);
     }
     
@@ -99,6 +112,10 @@ void LlamaContextPool::shutdown_pool() {
             if (ctx->batch_processor) {
                 ctx->batch_processor->shutdown();
                 delete ctx->batch_processor;
+            }
+            if (ctx->speculative_decoder) {
+                ctx->speculative_decoder->shutdown();
+                delete ctx->speculative_decoder;
             }
             if (ctx->ctx) {
                 llama_free(ctx->ctx);
@@ -420,4 +437,84 @@ void LlamaContextPool::process_batched_requests() {
         }
     }
     pool_mutex->unlock();
+}
+
+// Speculative decoding control methods
+void LlamaContextPool::set_speculative_mode(bool enabled) {
+    speculative_mode_enabled = enabled;
+    
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (enabled && !ctx->speculative_decoder) {
+            ctx->speculative_decoder = new SpeculativeDecoder();
+            if (ctx->speculative_decoder->initialize(model, ctx->ctx)) {
+                ctx->speculative_mode = true;
+            } else {
+                delete ctx->speculative_decoder;
+                ctx->speculative_decoder = nullptr;
+                ctx->speculative_mode = false;
+            }
+        } else if (!enabled && ctx->speculative_decoder) {
+            ctx->speculative_decoder->shutdown();
+            delete ctx->speculative_decoder;
+            ctx->speculative_decoder = nullptr;
+            ctx->speculative_mode = false;
+        }
+    }
+    pool_mutex->unlock();
+}
+
+bool LlamaContextPool::get_speculative_mode() const {
+    return speculative_mode_enabled;
+}
+
+void LlamaContextPool::set_lookahead_tokens(uint32_t tokens) {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->speculative_decoder) {
+            ctx->speculative_decoder->set_lookahead_tokens(tokens);
+        }
+    }
+    pool_mutex->unlock();
+}
+
+uint32_t LlamaContextPool::get_lookahead_tokens() const {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->speculative_decoder) {
+            uint32_t tokens = ctx->speculative_decoder->get_lookahead_tokens();
+            pool_mutex->unlock();
+            return tokens;
+        }
+    }
+    pool_mutex->unlock();
+    return 4; // Default value
+}
+
+void LlamaContextPool::set_acceptance_threshold(float threshold) {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->speculative_decoder) {
+            ctx->speculative_decoder->set_acceptance_threshold(threshold);
+        }
+    }
+    pool_mutex->unlock();
+}
+
+float LlamaContextPool::get_acceptance_threshold() const {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->speculative_decoder) {
+            float threshold = ctx->speculative_decoder->get_acceptance_threshold();
+            pool_mutex->unlock();
+            return threshold;
+        }
+    }
+    pool_mutex->unlock();
+    return 0.7f; // Default value
 }
