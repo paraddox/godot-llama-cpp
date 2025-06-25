@@ -3,11 +3,12 @@
 
 #include <llama.h>
 #include <godot_cpp/classes/resource.hpp>
+#include <godot_cpp/core/class_db.hpp>
 
 namespace godot {
 
 class LlamaModel : public Resource {
-	GDCLASS(LlamaModel, Resource)
+	GDCLASS(LlamaModel, Resource);
 
 private:
 	llama_model_params model_params;

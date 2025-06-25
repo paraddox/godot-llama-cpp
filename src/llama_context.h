@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/semaphore.hpp>
 #include <godot_cpp/classes/thread.hpp>
 #include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/core/class_db.hpp>
 namespace godot {
 
 struct completion_request {
@@ -17,14 +18,18 @@ struct completion_request {
 };
 
 class LlamaContext : public Node {
-	GDCLASS(LlamaContext, Node)
+	GDCLASS(LlamaContext, Node);
 
 private:
 	Ref<LlamaModel> model;
 	llama_context *ctx = nullptr;
-  llama_sampling_context *sampling_ctx = nullptr;
+  struct llama_sampler *sampler = nullptr;
 	llama_context_params ctx_params;
-  llama_sampling_params sampling_params;
+  // Sampling parameters now stored individually
+  float temperature = 0.8f;
+  float top_p = 0.95f;
+  float penalty_freq = 0.0f;
+  float penalty_present = 0.0f;
   int32_t n_len = 1024;
 	int request_id = 0;
 	Vector<completion_request> completion_requests;

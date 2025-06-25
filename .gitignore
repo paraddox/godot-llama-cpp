@@ -1,6 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
-
+zig*
+temp_godot/
 # Ignore library files but not the gdextension file
 demo/bin/*
 !demo/bin/android

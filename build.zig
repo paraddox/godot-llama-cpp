@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) !void {
         "The compute backend to use.",
     ) orelse ComputeBackend.cpu;
 
-    const gen_run = b.addSystemCommand(&.{ "python", "binding_generator.py" });
+    const gen_run = b.addSystemCommand(&.{ "python3", "binding_generator.py" });
     gen_run.addFileArg(b.path("godot_cpp/gdextension/extension_api.json"));
     const gen_out = gen_run.addOutputDirectoryArg("godot-cpp-gen");
 
@@ -180,18 +180,14 @@ pub fn build(b: *std.Build) !void {
     try sources.appendSlice(&.{
         .{ .name = "build_info", .source_file = "build-info.cpp", .root = build_info_wf.getDirectory(), .dependencies = &.{&build_info_wf.step} },
         .{ .name = "ggml", .source_file = "llama.cpp/ggml/src/ggml.c" },
-        .{ .name = "sgemm", .source_file = "llama.cpp/ggml/src/sgemm.cpp" },
         .{ .name = "ggml_alloc", .source_file = "llama.cpp/ggml/src/ggml-alloc.c" },
-        .{ .name = "ggml_backend", .source_file = "llama.cpp/ggml/src/ggml-backend.c" },
+        .{ .name = "ggml_backend", .source_file = "llama.cpp/ggml/src/ggml-backend.cpp" },
         .{ .name = "ggml_quants", .source_file = "llama.cpp/ggml/src/ggml-quants.c" },
         .{ .name = "llama", .source_file = "llama.cpp/src/llama.cpp" },
-        .{ .name = "unicode", .source_file = "llama.cpp/src/unicode.cpp" },
-        .{ .name = "unicode_data", .source_file = "llama.cpp/src/unicode-data.cpp" },
         .{ .name = "common", .source_file = "llama.cpp/common/common.cpp" },
         .{ .name = "console", .source_file = "llama.cpp/common/console.cpp" },
         .{ .name = "sampling", .source_file = "llama.cpp/common/sampling.cpp" },
-        .{ .name = "grammar_parser", .source_file = "llama.cpp/common/grammar-parser.cpp" },
-        .{ .name = "json_schema_to_grammar", .source_file = "llama.cpp/common/json-schema-to-grammar.cpp" },
+        // Removed json_schema_to_grammar due to nlohmann/json dependency
     });
 
     try c_flags.appendSlice(base_flags.items);

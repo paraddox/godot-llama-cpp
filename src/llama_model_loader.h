@@ -2,11 +2,12 @@
 #define LLAMA_MODEL_LOADER_H
 
 #include <godot_cpp/classes/resource_format_loader.hpp>
+#include <godot_cpp/core/class_db.hpp>
 
 namespace godot {
 
 class LlamaModelLoader : public ResourceFormatLoader {
-	GDCLASS(LlamaModelLoader, ResourceFormatLoader)
+	GDCLASS(LlamaModelLoader, ResourceFormatLoader);
 
 protected:
 	static void _bind_methods(){};
