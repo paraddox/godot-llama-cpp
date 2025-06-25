@@ -4,6 +4,7 @@
 #include "llama.h"
 #include "common.h"
 #include "llama_model.h"
+#include "llama_context_pool.h"
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/semaphore.hpp>
@@ -22,6 +23,7 @@ class LlamaContext : public Node {
 
 private:
 	Ref<LlamaModel> model;
+	// Legacy single-context fields (kept for compatibility)
 	llama_context *ctx = nullptr;
   struct llama_sampler *sampler = nullptr;
 	llama_context_params ctx_params;
@@ -34,11 +36,17 @@ private:
 	int request_id = 0;
 	Vector<completion_request> completion_requests;
 
+	// Legacy threading (kept for compatibility)
 	Ref<Thread> thread;
 	Ref<Semaphore> semaphore;
 	Ref<Mutex> mutex;
   std::vector<llama_token> context_tokens;
   bool exit_thread = false;
+  
+  // New pool-based architecture
+  LlamaContextPool* context_pool = nullptr;
+  bool use_pool = true;
+  uint32_t pool_size = 4;
 
 protected:
 	static void _bind_methods();
@@ -50,6 +58,12 @@ public:
 	void initialize_context();
 	int request_completion(const String &prompt);
 	void __thread_loop();
+	
+	// Pool management
+	void set_use_pool(bool enabled);
+	bool get_use_pool() const;
+	void set_pool_size(uint32_t size);
+	uint32_t get_pool_size() const;
 
 	uint32_t get_seed();
 	void set_seed(uint32_t seed);

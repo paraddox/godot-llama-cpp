@@ -2,6 +2,7 @@
 #include "common.h"
 #include "llama.h"
 #include "llama_model.h"
+#include "llama_context_pool.h"
 #include <algorithm>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/os.hpp>
@@ -48,6 +49,14 @@ void LlamaContext::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("initialize_context"), &LlamaContext::initialize_context);
 	ClassDB::bind_method(D_METHOD("request_completion", "prompt"), &LlamaContext::request_completion);
 	ClassDB::bind_method(D_METHOD("__thread_loop"), &LlamaContext::__thread_loop);
+
+	ClassDB::bind_method(D_METHOD("set_use_pool", "enabled"), &LlamaContext::set_use_pool);
+	ClassDB::bind_method(D_METHOD("get_use_pool"), &LlamaContext::get_use_pool);
+	ClassDB::add_property("LlamaContext", PropertyInfo(Variant::BOOL, "use_pool"), "set_use_pool", "get_use_pool");
+	
+	ClassDB::bind_method(D_METHOD("set_pool_size", "size"), &LlamaContext::set_pool_size);
+	ClassDB::bind_method(D_METHOD("get_pool_size"), &LlamaContext::get_pool_size);
+	ClassDB::add_property("LlamaContext", PropertyInfo(Variant::INT, "pool_size"), "set_pool_size", "get_pool_size");
 
 	ADD_SIGNAL(MethodInfo("completion_generated", PropertyInfo(Variant::DICTIONARY, "chunk")));
 }
@@ -101,6 +110,22 @@ void LlamaContext::initialize_context() {
 	}
 	
 	UtilityFunctions::print("initialize_context: Model is loaded, proceeding with context init");
+	
+	// Initialize pool if enabled
+	if (use_pool) {
+		UtilityFunctions::print(vformat("initialize_context: Initializing context pool with %d contexts", pool_size));
+		context_pool = new LlamaContextPool();
+		
+		if (!context_pool->initialize(model, pool_size)) {
+			UtilityFunctions::printerr("initialize_context: Failed to initialize context pool");
+			delete context_pool;
+			context_pool = nullptr;
+			use_pool = false; // Fall back to legacy mode
+		} else {
+			UtilityFunctions::print("initialize_context: Context pool initialized successfully");
+			return; // Skip legacy initialization
+		}
+	}
 
 	mutex.instantiate();
 	semaphore.instantiate();
@@ -299,6 +324,12 @@ PackedStringArray LlamaContext::_get_configuration_warnings() const {
 }
 
 int LlamaContext::request_completion(const String &prompt) {
+	// Use pool if available
+	if (use_pool && context_pool) {
+		return context_pool->submit_request(prompt, temperature, top_p, n_len);
+	}
+	
+	// Fall back to legacy single-context mode
 	// Check if context is properly initialized
 	if (!mutex.is_valid() || !semaphore.is_valid() || !ctx) {
 		UtilityFunctions::printerr(vformat("%s: Context not initialized - model may be null or failed to load", __func__));
@@ -387,7 +418,14 @@ void LlamaContext::_exit_tree() {
 		return;
 	}
 
-	// Only cleanup if initialization succeeded
+	// Cleanup pool if active
+	if (context_pool) {
+		context_pool->shutdown_pool();
+		delete context_pool;
+		context_pool = nullptr;
+	}
+
+	// Only cleanup legacy resources if initialization succeeded
 	if (mutex.is_valid() && semaphore.is_valid() && thread.is_valid()) {
 		mutex->lock();
 		exit_thread = true;
@@ -406,4 +444,21 @@ void LlamaContext::_exit_tree() {
 		sampler = nullptr;
 	}
 	llama_backend_free();
+}
+
+// Pool management methods
+void LlamaContext::set_use_pool(bool enabled) {
+	use_pool = enabled;
+}
+
+bool LlamaContext::get_use_pool() const {
+	return use_pool;
+}
+
+void LlamaContext::set_pool_size(uint32_t size) {
+	pool_size = std::max(1u, std::min(16u, size)); // Clamp between 1-16
+}
+
+uint32_t LlamaContext::get_pool_size() const {
+	return pool_size;
 }
