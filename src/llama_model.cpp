@@ -1,5 +1,6 @@
 #include "llama_model.h"
 #include "llama.h"
+#include "ggml-cpu.h"
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -31,12 +32,21 @@ void LlamaModel::load_model() {
 	// Initialize backends before loading model
 	llama_backend_init();
 	
-	// Try to register CPU backend
+	// Register CPU backend explicitly
 	static bool backends_loaded = false;
 	if (!backends_loaded) {
+		// Try explicit CPU backend registration first
+		ggml_backend_reg_t cpu_reg = ggml_backend_cpu_reg();
+		if (cpu_reg) {
+			UtilityFunctions::print("CPU backend registered successfully");
+		} else {
+			UtilityFunctions::printerr("Failed to register CPU backend");
+		}
+		
+		// Also try loading all backends
 		ggml_backend_load_all();
 		backends_loaded = true;
-		UtilityFunctions::print("Backends loaded");
+		UtilityFunctions::print("Backend initialization completed");
 	}
 
 	String absPath = ProjectSettings::get_singleton()->globalize_path(get_path());
