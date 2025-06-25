@@ -194,10 +194,13 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "ggml_cpu", .source_file = "llama.cpp/ggml/src/ggml-cpu/ggml-cpu.cpp" },
         .{ .name = "ggml_cpu_c", .source_file = "llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c" },
         .{ .name = "ggml_cpu_feats_x86", .source_file = "llama.cpp/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp" },
+        .{ .name = "ggml_cpu_quants_x86", .source_file = "llama.cpp/ggml/src/ggml-cpu/arch/x86/quants.c" },
         .{ .name = "ggml_cpu_vec", .source_file = "llama.cpp/ggml/src/ggml-cpu/vec.cpp" },
         .{ .name = "ggml_cpu_ops", .source_file = "llama.cpp/ggml/src/ggml-cpu/ops.cpp" },
         .{ .name = "ggml_cpu_traits", .source_file = "llama.cpp/ggml/src/ggml-cpu/traits.cpp" },
         .{ .name = "ggml_cpu_quants", .source_file = "llama.cpp/ggml/src/ggml-cpu/quants.c" },
+        .{ .name = "ggml_cpu_unary_ops", .source_file = "llama.cpp/ggml/src/ggml-cpu/unary-ops.cpp" },
+        .{ .name = "ggml_cpu_binary_ops", .source_file = "llama.cpp/ggml/src/ggml-cpu/binary-ops.cpp" },
         // All llama.cpp core source files
         .{ .name = "llama", .source_file = "llama.cpp/src/llama.cpp" },
         .{ .name = "llama_adapter", .source_file = "llama.cpp/src/llama-adapter.cpp" },
