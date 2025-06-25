@@ -260,6 +260,12 @@ PackedStringArray LlamaContext::_get_configuration_warnings() const {
 }
 
 int LlamaContext::request_completion(const String &prompt) {
+	// Check if context is properly initialized
+	if (!mutex.is_valid() || !semaphore.is_valid() || !ctx) {
+		UtilityFunctions::printerr(vformat("%s: Context not initialized - model may be null or failed to load", __func__));
+		return -1;
+	}
+
 	int id = request_id++;
 
 	UtilityFunctions::print(vformat("%s: Requesting completion for prompt id: %d", __func__, id));

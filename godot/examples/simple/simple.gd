@@ -5,6 +5,16 @@ const message = preload("res://examples/simple/message.tscn")
 @onready var messages_container = %MessagesContainer
 @onready var llama_context = %LlamaContext
 
+func _ready():
+	# Load the model if not already set
+	if llama_context.model == null:
+		print("Loading Phi-3 Mini model...")
+		var llama_model = LlamaModel.new()
+		llama_model.resource_path = "res://models/Phi-3-mini-4k-instruct-q4.gguf"
+		llama_model.load_model()
+		llama_context.model = llama_model
+		print("Model loaded successfully")
+
 func _on_text_edit_submit(input: String) -> void:
 	handle_input(input)
 
