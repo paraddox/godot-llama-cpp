@@ -28,6 +28,17 @@ void LlamaModel::load_model() {
 		return;
 	}
 
+	// Initialize backends before loading model
+	llama_backend_init();
+	
+	// Try to register CPU backend
+	static bool backends_loaded = false;
+	if (!backends_loaded) {
+		ggml_backend_load_all();
+		backends_loaded = true;
+		UtilityFunctions::print("Backends loaded");
+	}
+
 	String absPath = ProjectSettings::get_singleton()->globalize_path(get_path());
 
 	model = llama_load_model_from_file(absPath.utf8().get_data(), model_params);

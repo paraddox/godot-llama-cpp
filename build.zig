@@ -56,6 +56,7 @@ pub fn build(b: *std.Build) !void {
     plugin.addIncludePath(b.path("llama.cpp/common"));
     plugin.addIncludePath(b.path("llama.cpp/ggml/include"));
     plugin.addIncludePath(b.path("llama.cpp/ggml/src"));
+    plugin.addIncludePath(b.path("llama.cpp/ggml/src/ggml-cpu"));
 
     // godot-cpp
     const lib_godot = b.addStaticLibrary(.{
@@ -110,6 +111,7 @@ pub fn build(b: *std.Build) !void {
         b.path("llama.cpp/common"),
         b.path("llama.cpp/ggml/include"),
         b.path("llama.cpp/ggml/src"),
+        b.path("llama.cpp/ggml/src/ggml-cpu"),
     });
 
     switch (target.result.os.tag) {
@@ -188,6 +190,10 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "ggml_backend_reg", .source_file = "llama.cpp/ggml/src/ggml-backend-reg.cpp" },
         .{ .name = "ggml_quants", .source_file = "llama.cpp/ggml/src/ggml-quants.c" },
         .{ .name = "gguf", .source_file = "llama.cpp/ggml/src/gguf.cpp" },
+        // CPU backend
+        .{ .name = "ggml_cpu", .source_file = "llama.cpp/ggml/src/ggml-cpu/ggml-cpu.cpp" },
+        .{ .name = "ggml_cpu_c", .source_file = "llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c" },
+        .{ .name = "ggml_cpu_feats_x86", .source_file = "llama.cpp/ggml/src/ggml-cpu/arch/x86/cpu-feats.cpp" },
         // All llama.cpp core source files
         .{ .name = "llama", .source_file = "llama.cpp/src/llama.cpp" },
         .{ .name = "llama_adapter", .source_file = "llama.cpp/src/llama-adapter.cpp" },

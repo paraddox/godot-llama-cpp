@@ -67,13 +67,18 @@ LlamaContext::LlamaContext() {
 }
 
 void LlamaContext::_enter_tree() {
-	// TODO: remove this and use runtime classes once godot 4.3 lands, see https://github.com/godotengine/godot/pull/82554
+	// Skip initialization in editor mode
 	if (Engine::get_singleton()->is_editor_hint()) {
 		return;
 	}
 
+	if (model == nullptr) {
+		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, model property is null", __func__));
+		return;
+	}
+
 	if (model->model == NULL) {
-		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, model property not defined", __func__));
+		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, model not loaded", __func__));
 		return;
 	}
 
@@ -337,13 +342,16 @@ void LlamaContext::_exit_tree() {
 		return;
 	}
 
-	mutex->lock();
-	exit_thread = true;
-	mutex->unlock();
+	// Only cleanup if initialization succeeded
+	if (mutex.is_valid() && semaphore.is_valid() && thread.is_valid()) {
+		mutex->lock();
+		exit_thread = true;
+		mutex->unlock();
 
-	semaphore->post();
+		semaphore->post();
 
-	thread->wait_to_finish();
+		thread->wait_to_finish();
+	}
 
 	if (ctx) {
 		llama_free(ctx);
