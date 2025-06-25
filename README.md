@@ -44,7 +44,7 @@ while (true):
   - **🔄 Asynchronous Completion Generation** - Non-blocking text generation
   - **📦 GGUF Resource Support** - Model files as native Godot resources
   - **🌐 Cross-Platform Compatibility** - Support for multiple operating systems
-  
+
   ### Platform & Compute Backend Support:
   | Platform | CPU | Metal | Vulkan | CUDA |
   |----------|-----|-------|--------|------|
@@ -80,7 +80,7 @@ while (true):
 
 1. **Clone the repository:**
    ```bash
-   git clone --recurse-submodules https://github.com/hazelnutcloud/godot-llama-cpp.git
+   git clone --recurse-submodules https://github.com/paraddox/godot-llama-cpp.git
    cd godot-llama-cpp
    ```
 
@@ -90,12 +90,12 @@ while (true):
    mkdir build && cd build
    cmake .. -DCMAKE_BUILD_TYPE=Release
    make -j$(nproc)
-   
+
    # OR for your custom project
    mkdir build && cd build
    cmake -DADDON_OUTPUT_DIR=/path/to/your-project/addons/godot-llama-cpp .. -DCMAKE_BUILD_TYPE=Release
    make -j$(nproc)
-   
+
    # Force CPU-only build (disable GPU acceleration)
    cmake .. -DGGML_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
    ```
