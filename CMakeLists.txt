@@ -125,6 +125,12 @@ target_link_libraries(${EXTENSION_NAME} PRIVATE
     godot-cpp  # Our godot-cpp build
 )
 
+# Link CUDA backend if CUDA is enabled
+if(GGML_CUDA)
+    target_link_libraries(${EXTENSION_NAME} PRIVATE ggml-cuda)
+    message(STATUS "🚀 CUDA backend linked - GPU acceleration enabled")
+endif()
+
 target_include_directories(${EXTENSION_NAME} PRIVATE
     src
     godot_cpp/gdextension
