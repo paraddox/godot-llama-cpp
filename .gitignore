@@ -66,3 +66,6 @@ llama_test_project/
 # Additional build artifacts
 *.dylib
 *.dll
+
+# Godot editor metadata files
+*.uid
