@@ -1,8 +1,0 @@
-[application]
-
-config/name="godot-llama-cpp-test"
-config/features=PackedStringArray("4.4")
-
-[debug]
-
-gdscript/warnings/enable=true

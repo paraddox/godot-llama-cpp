@@ -55,3 +55,14 @@ zig-out
 *.gguf
 
 godot/addons/godot-llama-cpp/lib/*
+
+# Test directories and projects
+*test*/
+*_test/
+test/
+phi3_test/
+llama_test_project/
+
+# Additional build artifacts
+*.dylib
+*.dll
