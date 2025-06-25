@@ -30,8 +30,10 @@ endif()
 string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE_LOWER)
 set(EXTENSION_NAME "libgodot-llama-cpp-${ARCH_NAME}-${PLATFORM_NAME}-gnu-${CMAKE_BUILD_TYPE}")
 
-# Output directory for final extension
-set(ADDON_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/godot/addons/godot-llama-cpp")
+# Configurable output directory for final extension (equivalent to Zig's --prefix)
+if(NOT DEFINED ADDON_OUTPUT_DIR)
+    set(ADDON_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/godot/addons/godot-llama-cpp" CACHE PATH "Output directory for the addon")
+endif()
 
 #
 # Phase 1: llama.cpp as subdirectory (official CMake build)

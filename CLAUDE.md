@@ -8,9 +8,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CMake Build (Recommended):**
 - `mkdir build && cd build` - Create build directory
-- `cmake ..` - Configure CMake build 
+- `cmake ..` - Configure CMake build (default output: `godot/addons/godot-llama-cpp/`)
+- `cmake -DADDON_OUTPUT_DIR=/path/to/your-project/addons/godot-llama-cpp ..` - Configure with custom addon path
 - `make -j$(nproc)` - Build the plugin shared library
-- Built extension automatically copied to `godot/addons/godot-llama-cpp/lib/`
+- Built extension automatically copied to specified addon directory
+
+**Examples:**
+```bash
+# Build for included demo project (default)
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+
+# Build for external project
+mkdir build && cd build  
+cmake -DADDON_OUTPUT_DIR=/home/user/my-game/addons/godot-llama-cpp ..
+make -j$(nproc)
+```
 
 **Legacy Zig Build (Deprecated):**
 - `zig build --prefix <path>` - Old Zig build (causes SIGILL crashes)
