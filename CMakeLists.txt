@@ -26,9 +26,9 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(ARCH_NAME "x86_64")
 endif()
 
-# Extension naming
+# Extension naming (without lib prefix - CMake adds it automatically)
 string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE_LOWER)
-set(EXTENSION_NAME "libgodot-llama-cpp-${ARCH_NAME}-${PLATFORM_NAME}-gnu-${CMAKE_BUILD_TYPE}")
+set(EXTENSION_NAME "godot-llama-cpp-${ARCH_NAME}-${PLATFORM_NAME}-gnu-${CMAKE_BUILD_TYPE}")
 
 # Configurable output directory for final extension (equivalent to Zig's --prefix)
 if(NOT DEFINED ADDON_OUTPUT_DIR)
@@ -157,13 +157,13 @@ add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
 add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy 
             $<TARGET_FILE:${EXTENSION_NAME}>
-            ${ADDON_OUTPUT_DIR}/lib/${EXTENSION_NAME}.so
+            ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>
     COMMENT "Installing extension to addon directory"
 )
 
 # Print success message
 add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo 
-            "✅ Extension built successfully: ${ADDON_OUTPUT_DIR}/lib/${EXTENSION_NAME}.so"
+            "✅ Extension built successfully: ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>"
     COMMENT "Build complete"
 )
