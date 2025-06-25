@@ -229,12 +229,15 @@ void LlamaContext::__thread_loop() {
 
 		context_tokens.insert(context_tokens.end(), request_tokens.begin(), request_tokens.end());
 
+		// Track current batch for proper sampling
+		llama_batch current_batch = batch;
+		
 		while (true) {
 			if (exit_thread) {
 				return;
 			}
-			// Modern sampling API
-			llama_token new_token_id = llama_sampler_sample(sampler, ctx, batch.n_tokens - 1);
+			// Modern sampling API - use current batch for sampling
+			llama_token new_token_id = llama_sampler_sample(sampler, ctx, current_batch.n_tokens - 1);
 			llama_sampler_accept(sampler, new_token_id);
 
 			Dictionary response;
@@ -266,10 +269,11 @@ void LlamaContext::__thread_loop() {
 
 			// Create new batch for single token generation
 			llama_batch new_batch = llama_batch_get_one(&new_token_id, 1);
+			current_batch = new_batch;  // Update current batch for next iteration
 
 			curr_token_pos++;
 
-			if (llama_decode(ctx, new_batch) != 0) {
+			if (llama_decode(ctx, current_batch) != 0) {
 				decode_failed = true;
 				break;
 			}
