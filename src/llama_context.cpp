@@ -107,26 +107,24 @@ void LlamaContext::initialize_context() {
 	thread.instantiate();
 
 	// Backend is already initialized globally, no need to do it again
-	// Try minimal context parameters first to avoid SIGILL
-	llama_context_params minimal_params = llama_context_default_params();
-	minimal_params.n_ctx = 512;  // Very small context
-	minimal_params.n_batch = 32;  // Small batch
-	minimal_params.n_ubatch = 32;  // Small ubatch  
-	minimal_params.n_threads = 1;  // Single thread
-	minimal_params.n_threads_batch = 1;
-	minimal_params.no_perf = true;  // Disable performance counters
+	// Use production parameters for optimal performance (CMake build resolved SIGILL issues)
+	llama_context_params production_params = llama_context_default_params();
+	production_params.n_ctx = std::min(2048u, ctx_params.n_ctx);  // Reasonable context size
+	production_params.n_batch = 512;  // Optimal batch size for GPU
+	production_params.n_ubatch = 512;  // Match batch size
 	
-	UtilityFunctions::print(vformat("initialize_context: Creating minimal context with n_ctx=%d, n_threads=%d", minimal_params.n_ctx, minimal_params.n_threads));
+	// Use multi-threading optimized for system (20 cores available)
+	int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
+	production_params.n_threads = optimal_threads;
+	production_params.n_threads_batch = optimal_threads;
+	production_params.no_perf = false;  // Enable performance monitoring
+	
+	UtilityFunctions::print(vformat("initialize_context: Creating production context with n_ctx=%d, n_batch=%d, n_threads=%d", 
+		production_params.n_ctx, production_params.n_batch, production_params.n_threads));
 	UtilityFunctions::print("initialize_context: About to call llama_init_from_model...");
 	
-	// Try catch the crash point more precisely
-	try {
-		ctx = llama_init_from_model(model->model, minimal_params);
-		UtilityFunctions::print("initialize_context: llama_init_from_model completed successfully");
-	} catch (...) {
-		UtilityFunctions::printerr("initialize_context: Exception caught during llama_init_from_model");
-		return;
-	}
+	ctx = llama_init_from_model(model->model, production_params);
+	UtilityFunctions::print("initialize_context: llama_init_from_model completed successfully");
 	if (ctx == NULL) {
 		UtilityFunctions::printerr(vformat("%s: Failed to initialize llama context, null ctx", __func__));
 		return;

@@ -27,15 +27,40 @@ void initialize_types(ModuleInitializationLevel p_level)
 	if (!Engine::get_singleton()->is_editor_hint()) {
 		UtilityFunctions::print("Initializing llama.cpp backends...");
 		
-		// Load backends (CPU should be auto-registered with GGML_USE_CPU)
+		// Load backends (CPU and GPU backends should be auto-registered)
 		ggml_backend_load_all();
 		
-		// Check if CPU backend is available
+		// Detailed backend detection and reporting
 		size_t backend_count = ggml_backend_reg_count();
-		UtilityFunctions::print(vformat("Backend registrations available: %d", (int)backend_count));
+		UtilityFunctions::print(vformat("Total backend registrations available: %d", (int)backend_count));
+		
+		// Check for specific backend types
+		bool has_cpu = false, has_cuda = false, has_vulkan = false;
+		
+		for (size_t i = 0; i < backend_count; i++) {
+			ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+			const char* name = ggml_backend_reg_name(reg);
+			UtilityFunctions::print(vformat("  Backend %d: %s", (int)i, String(name)));
+			
+			String backend_name = String(name).to_lower();
+			if (backend_name.contains("cpu")) has_cpu = true;
+			else if (backend_name.contains("cuda")) has_cuda = true;
+			else if (backend_name.contains("vulkan")) has_vulkan = true;
+		}
+		
+		// Report acceleration status
+		if (has_cuda) {
+			UtilityFunctions::print("🚀 GPU Acceleration: CUDA backend detected - high performance expected!");
+		} else if (has_vulkan) {
+			UtilityFunctions::print("🚀 GPU Acceleration: Vulkan backend detected - good performance expected!");
+		} else if (has_cpu) {
+			UtilityFunctions::print("⚠️  CPU-Only: No GPU backends detected - performance may be limited");
+		} else {
+			UtilityFunctions::printerr("❌ No backends detected - check build configuration");
+		}
 		
 		llama_backend_init();
-		UtilityFunctions::print("llama.cpp backends initialized");
+		UtilityFunctions::print("llama.cpp backends initialized successfully");
 	}
 
 	ClassDB::register_class<LlamaModelLoader>();
