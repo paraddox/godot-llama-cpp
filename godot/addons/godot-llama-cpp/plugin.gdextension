@@ -10,7 +10,7 @@ macos.release = "res://addons/godot-llama-cpp/lib/libgodot-llama-cpp-aarch64-mac
 windows.debug.x86_64 = "res://addons/godot-llama-cpp/lib/godot-llama-cpp-x86_64-windows-gnu-Debug.dll"
 windows.release.x86_64 = "res://addons/godot-llama-cpp/lib/godot-llama-cpp-x86_64-windows-gnu-ReleaseSafe.dll"
 linux.debug.x86_64 = "res://addons/godot-llama-cpp/lib/libgodot-llama-cpp-x86_64-linux-gnu-Debug.so"
-linux.release.x86_64 = "res://addons/godot-llama-cpp/lib/libgodot-llama-cpp-x86_64-linux-gnu-ReleaseSafe.so"
+linux.release.x86_64 = "res://addons/godot-llama-cpp/lib/libgodot-llama-cpp-x86_64-linux-gnu-Release.so"
 
 [icons]
 

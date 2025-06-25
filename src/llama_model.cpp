@@ -53,8 +53,8 @@ void LlamaModel::load_model() {
 	// Log model parameters  
 	UtilityFunctions::print(vformat("load_model: Model params - n_gpu_layers: %d", model_params.n_gpu_layers));
 
-	UtilityFunctions::print("load_model: Calling llama_load_model_from_file");
-	model = llama_load_model_from_file(absPath.utf8().get_data(), model_params);
+	UtilityFunctions::print("load_model: Calling llama_model_load_from_file");
+	model = llama_model_load_from_file(absPath.utf8().get_data(), model_params);
 
 	if (model == NULL) {
 		UtilityFunctions::printerr(vformat("load_model: llama_load_model_from_file returned NULL for path: %s", absPath));
@@ -78,6 +78,6 @@ void LlamaModel::set_n_gpu_layers(int32_t n) {
 
 LlamaModel::~LlamaModel() {
 	if (model) {
-		llama_free_model(model);
+		llama_model_free(model);
 	}
 }
