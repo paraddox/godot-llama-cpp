@@ -3,6 +3,7 @@
 
 #include "llama.h"
 #include "llama_model.h"
+#include "batch_processor.h"
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/semaphore.hpp>
@@ -18,11 +19,13 @@ namespace godot {
 struct PooledContext {
     llama_context* ctx = nullptr;
     struct llama_sampler* sampler = nullptr;
+    BatchProcessor* batch_processor = nullptr;
     std::vector<llama_token> context_tokens;
     std::atomic<bool> busy{false};
     std::atomic<int> request_count{0};
     uint32_t context_id;
     bool healthy = true;
+    bool batch_mode = true;
 };
 
 struct ContextRequest {
@@ -50,6 +53,7 @@ private:
     
     uint32_t pool_size;
     llama_context_params base_params;
+    bool batch_mode_enabled = true;
 
     PooledContext* acquire_context();
     void release_context(PooledContext* ctx);
@@ -67,6 +71,13 @@ public:
                       float top_p = 0.95f, int32_t max_tokens = 1024,
                       uint32_t preferred_context = UINT32_MAX);
     
+    // Batching controls
+    void set_batch_mode(bool enabled);
+    bool get_batch_mode() const;
+    void set_batch_size(uint32_t min_size, uint32_t max_size);
+    void set_batch_timeout(uint32_t timeout_ms);
+    void process_batched_requests();
+    
     // Performance monitoring
     struct PoolStats {
         uint32_t active_contexts;
@@ -74,6 +85,8 @@ public:
         uint32_t queued_requests;
         uint64_t total_requests_processed;
         float average_gpu_utilization;
+        uint64_t batched_requests_processed;
+        float average_batch_efficiency;
     };
     
     PoolStats get_stats() const;

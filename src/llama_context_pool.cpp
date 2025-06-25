@@ -1,4 +1,5 @@
 #include "llama_context_pool.h"
+#include "batch_processor.h"
 #include "common.h"
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -54,6 +55,17 @@ bool LlamaContextPool::initialize(Ref<LlamaModel> p_model, uint32_t p_pool_size)
         llama_sampler_chain_add(ctx->sampler, llama_sampler_init_top_p(0.95f, 1));
         llama_sampler_chain_add(ctx->sampler, llama_sampler_init_dist(0));
         
+        // Initialize batch processor for this context
+        if (batch_mode_enabled) {
+            ctx->batch_processor = new BatchProcessor();
+            if (!ctx->batch_processor->initialize(model, ctx->ctx)) {
+                UtilityFunctions::printerr(vformat("LlamaContextPool: Failed to initialize batch processor for context %d", i));
+                delete ctx->batch_processor;
+                ctx->batch_processor = nullptr;
+                ctx->batch_mode = false;
+            }
+        }
+        
         contexts.set(i, ctx);
     }
     
@@ -84,6 +96,10 @@ void LlamaContextPool::shutdown_pool() {
     for (uint32_t i = 0; i < contexts.size(); i++) {
         PooledContext* ctx = contexts[i];
         if (ctx) {
+            if (ctx->batch_processor) {
+                ctx->batch_processor->shutdown();
+                delete ctx->batch_processor;
+            }
             if (ctx->ctx) {
                 llama_free(ctx->ctx);
             }
@@ -135,6 +151,21 @@ void LlamaContextPool::release_context(PooledContext* ctx) {
 int LlamaContextPool::submit_request(const String& prompt, float temperature, 
                                    float top_p, int32_t max_tokens,
                                    uint32_t preferred_context) {
+    
+    // Try batch processing first if enabled
+    if (batch_mode_enabled) {
+        PooledContext* ctx = acquire_context();
+        if (ctx && ctx->batch_processor && ctx->batch_mode) {
+            int batch_id = ctx->batch_processor->submit_request(prompt, max_tokens);
+            release_context(ctx);
+            return batch_id;
+        }
+        if (ctx) {
+            release_context(ctx);
+        }
+    }
+    
+    // Fall back to individual request processing
     int request_id = next_request_id.fetch_add(1);
     
     ContextRequest req;
@@ -285,6 +316,13 @@ void LlamaContextPool::reset_unhealthy_contexts() {
     for (uint32_t i = 0; i < contexts.size(); i++) {
         PooledContext* ctx = contexts[i];
         if (!ctx->healthy && !ctx->busy.load()) {
+            // Clean up batch processor
+            if (ctx->batch_processor) {
+                ctx->batch_processor->shutdown();
+                delete ctx->batch_processor;
+                ctx->batch_processor = nullptr;
+            }
+            
             // Recreate context
             if (ctx->ctx) {
                 llama_free(ctx->ctx);
@@ -300,10 +338,85 @@ void LlamaContextPool::reset_unhealthy_contexts() {
                 llama_sampler_chain_add(ctx->sampler, llama_sampler_init_top_p(0.95f, 1));
                 llama_sampler_chain_add(ctx->sampler, llama_sampler_init_dist(0));
                 
+                // Recreate batch processor if needed
+                if (batch_mode_enabled) {
+                    ctx->batch_processor = new BatchProcessor();
+                    if (ctx->batch_processor->initialize(model, ctx->ctx)) {
+                        ctx->batch_mode = true;
+                    } else {
+                        delete ctx->batch_processor;
+                        ctx->batch_processor = nullptr;
+                        ctx->batch_mode = false;
+                    }
+                }
+                
                 ctx->context_tokens.clear();
                 ctx->healthy = true;
                 ctx->request_count.store(0);
             }
+        }
+    }
+    pool_mutex->unlock();
+}
+
+// Batching control methods
+void LlamaContextPool::set_batch_mode(bool enabled) {
+    batch_mode_enabled = enabled;
+    
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (enabled && !ctx->batch_processor) {
+            ctx->batch_processor = new BatchProcessor();
+            if (ctx->batch_processor->initialize(model, ctx->ctx)) {
+                ctx->batch_mode = true;
+            } else {
+                delete ctx->batch_processor;
+                ctx->batch_processor = nullptr;
+                ctx->batch_mode = false;
+            }
+        } else if (!enabled && ctx->batch_processor) {
+            ctx->batch_processor->shutdown();
+            delete ctx->batch_processor;
+            ctx->batch_processor = nullptr;
+            ctx->batch_mode = false;
+        }
+    }
+    pool_mutex->unlock();
+}
+
+bool LlamaContextPool::get_batch_mode() const {
+    return batch_mode_enabled;
+}
+
+void LlamaContextPool::set_batch_size(uint32_t min_size, uint32_t max_size) {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->batch_processor) {
+            ctx->batch_processor->set_batch_size(min_size, max_size);
+        }
+    }
+    pool_mutex->unlock();
+}
+
+void LlamaContextPool::set_batch_timeout(uint32_t timeout_ms) {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->batch_processor) {
+            ctx->batch_processor->set_batch_timeout(timeout_ms);
+        }
+    }
+    pool_mutex->unlock();
+}
+
+void LlamaContextPool::process_batched_requests() {
+    pool_mutex->lock();
+    for (uint32_t i = 0; i < contexts.size(); i++) {
+        PooledContext* ctx = contexts[i];
+        if (ctx->batch_processor && !ctx->busy.load()) {
+            ctx->batch_processor->process_pending_requests();
         }
     }
     pool_mutex->unlock();
