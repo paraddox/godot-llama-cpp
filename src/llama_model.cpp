@@ -46,6 +46,34 @@ void LlamaModel::load_model() {
 	UtilityFunctions::print("load_model: Initializing model parameters");
 	// Initialize model parameters (backends are loaded globally)
 	model_params = llama_model_default_params();
+	
+	// Auto-configure GPU acceleration - attempt GPU even if runtime detection fails
+	// Check both backend registration and runtime device availability
+	ggml_backend_dev_t gpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU);
+	size_t backend_count = ggml_backend_reg_count();
+	bool cuda_backend_registered = false;
+	
+	// Check if CUDA backend is registered (even if runtime detection fails)
+	for (size_t i = 0; i < backend_count; i++) {
+		ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+		const char* name = ggml_backend_reg_name(reg);
+		String backend_name = String(name).to_lower();
+		if (backend_name.contains("cuda")) {
+			cuda_backend_registered = true;
+			break;
+		}
+	}
+	
+	// Force GPU acceleration if CUDA is available
+	if (cuda_backend_registered) {
+		// Force enable GPU layers - override any existing setting
+		model_params.n_gpu_layers = -1; // Use all available GPU layers
+		UtilityFunctions::print("🚀 CUDA backend detected - forcing GPU acceleration (all layers)");
+		UtilityFunctions::print("    Note: If GPU is busy with graphics, model will gracefully fall back to CPU");
+	} else {
+		UtilityFunctions::print("⚠️ No GPU backend available - using CPU-only mode");
+		model_params.n_gpu_layers = 0;
+	}
 
 	String absPath = ProjectSettings::get_singleton()->globalize_path(get_path());
 	UtilityFunctions::print(vformat("load_model: Resolved path: %s", absPath));

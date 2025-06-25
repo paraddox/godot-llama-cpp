@@ -128,7 +128,8 @@ target_link_libraries(${EXTENSION_NAME} PRIVATE
 # Link CUDA backend if CUDA is enabled
 if(GGML_CUDA)
     target_link_libraries(${EXTENSION_NAME} PRIVATE ggml-cuda)
-    message(STATUS "🚀 CUDA backend linked - GPU acceleration enabled")
+    target_compile_definitions(${EXTENSION_NAME} PRIVATE GGML_USE_CUDA)
+    message(STATUS "🚀 CUDA backend linked and GGML_USE_CUDA defined - GPU acceleration enabled")
 endif()
 
 target_include_directories(${EXTENSION_NAME} PRIVATE

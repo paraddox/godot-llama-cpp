@@ -22,41 +22,74 @@ static Ref<LlamaModelLoader> llamaModelLoader;
 
 void initialize_types(ModuleInitializationLevel p_level)
 {
+	UtilityFunctions::print(vformat("🚀 initialize_types called with level: %d", (int)p_level));
+	
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
+		UtilityFunctions::print("Skipping - not SCENE level");
 		return;
 	}
+	
+	UtilityFunctions::print("✅ Extension initialization starting...");
 
 	// Initialize llama.cpp backends globally at extension startup
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		UtilityFunctions::print("Initializing llama.cpp backends...");
-		
-		// Load backends (CPU and GPU backends should be auto-registered)
-		ggml_backend_load_all();
-		
-		// Explicitly try to register CUDA backend if available
+	// Note: Allow initialization in editor for testing and development
+	UtilityFunctions::print("Initializing llama.cpp backends...");
+	
+	// Preprocessor test - this should always show a message
 #ifdef GGML_USE_CUDA
-		UtilityFunctions::print("GGML_USE_CUDA is defined - checking CUDA availability...");
-		int cuda_device_count = ggml_backend_cuda_get_device_count();
-		UtilityFunctions::print(vformat("ggml_backend_cuda_get_device_count() returned: %d", cuda_device_count));
-		if (cuda_device_count > 0) {
-			UtilityFunctions::print(vformat("🚀 CUDA devices detected: %d", cuda_device_count));
-			
-			// Get CUDA device info
-			for (int i = 0; i < cuda_device_count; i++) {
-				char desc[256];
-				ggml_backend_cuda_get_device_description(i, desc, sizeof(desc));
-				
-				size_t free_mem, total_mem;
-				ggml_backend_cuda_get_device_memory(i, &free_mem, &total_mem);
-				
-				UtilityFunctions::print(vformat("  Device %d: %s (%d MB total, %d MB free)", 
-					i, String(desc), (int)(total_mem/1024/1024), (int)(free_mem/1024/1024)));
-			}
-		} else {
-			UtilityFunctions::print("❌ No CUDA devices detected by ggml_backend_cuda_get_device_count()");
-		}
+	UtilityFunctions::print("🔧 Preprocessor test: GGML_USE_CUDA is DEFINED");
+#else  
+	UtilityFunctions::print("🔧 Preprocessor test: GGML_USE_CUDA is NOT DEFINED");
+#endif
+	
+	// Load backends (CPU and GPU backends should be auto-registered)
+	ggml_backend_load_all();
+	
+	// Force registration of CUDA backend if available
+#ifdef GGML_USE_CUDA
+	UtilityFunctions::print("Manually registering CUDA backend...");
+	ggml_backend_reg_t cuda_reg = ggml_backend_cuda_reg();
+	if (cuda_reg) {
+		UtilityFunctions::print("✅ CUDA backend registration successful");
+	} else {
+		UtilityFunctions::print("❌ CUDA backend registration failed");
+	}
+#endif
+	
+	// Debug: Check if GGML_USE_CUDA is defined
+#ifdef GGML_USE_CUDA
+	UtilityFunctions::print("✅ GGML_USE_CUDA is defined - checking CUDA availability...");
 #else
-		UtilityFunctions::print("⚠️  GGML_USE_CUDA not defined - CUDA support not compiled");
+	UtilityFunctions::print("❌ GGML_USE_CUDA is NOT defined - CUDA support disabled");
+#endif
+
+	// Explicitly try to register CUDA backend if available
+#ifdef GGML_USE_CUDA
+	UtilityFunctions::print("✅ GGML_USE_CUDA is defined - checking CUDA availability...");
+	int cuda_device_count = ggml_backend_cuda_get_device_count();
+	UtilityFunctions::print(vformat("ggml_backend_cuda_get_device_count() returned: %d", cuda_device_count));
+	if (cuda_device_count > 0) {
+		UtilityFunctions::print(vformat("🚀 CUDA devices detected: %d", cuda_device_count));
+		
+		// Get CUDA device info
+		for (int i = 0; i < cuda_device_count; i++) {
+			char desc[256];
+			ggml_backend_cuda_get_device_description(i, desc, sizeof(desc));
+			UtilityFunctions::print(vformat("  Device %d: %s", i, String(desc)));
+		}
+		
+		 // Force register CUDA backend for all devices
+		for (int i = 0; i < cuda_device_count; i++) {
+			ggml_backend_reg_t cuda_reg = ggml_backend_cuda_reg();
+			if (cuda_reg) {
+				UtilityFunctions::print(vformat("Force registering CUDA backend for device %d", i));
+			}
+		}
+	} else {
+		UtilityFunctions::print("❌ No CUDA devices detected by ggml_backend_cuda_get_device_count()");
+	}
+#else
+	UtilityFunctions::print("⚠️  GGML_USE_CUDA not defined - CUDA support not compiled");
 #endif
 		
 		// Detailed backend detection and reporting
@@ -88,9 +121,8 @@ void initialize_types(ModuleInitializationLevel p_level)
 			UtilityFunctions::printerr("❌ No backends detected - check build configuration");
 		}
 		
-		llama_backend_init();
-		UtilityFunctions::print("llama.cpp backends initialized successfully");
-	}
+	llama_backend_init();
+	UtilityFunctions::print("llama.cpp backends initialized successfully");
 
 	ClassDB::register_class<LlamaModelLoader>();
 	llamaModelLoader.instantiate();
