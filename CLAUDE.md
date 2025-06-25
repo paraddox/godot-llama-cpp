@@ -4,12 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System
 
-This project uses Zig as the build system (requires Zig v0.13.0):
+🎯 **This project now uses CMake build system (migrated from Zig to resolve SIGILL crashes):**
 
-- `zig build` - Build the plugin shared library
-- `zig build --prefix <path>` - Build and install to specific directory (typically `<project>/addons/godot-llama-cpp`)
-- `zig build check` - Check if plugin compiles without full build
-- `zig build --help` - Show all build options
+**CMake Build (Recommended):**
+- `mkdir build && cd build` - Create build directory
+- `cmake ..` - Configure CMake build 
+- `make -j$(nproc)` - Build the plugin shared library
+- Built extension automatically copied to `godot/addons/godot-llama-cpp/lib/`
+
+**Legacy Zig Build (Deprecated):**
+- `zig build --prefix <path>` - Old Zig build (causes SIGILL crashes)
+- Use CMake instead for stable builds
 
 ### API Migration Status
 
@@ -56,9 +61,9 @@ The project has been successfully updated to work with the latest API versions a
 - ✅ **Extension Loading**: Fixed crashes during Godot editor startup by properly handling editor mode vs runtime mode
 - ✅ **Context Initialization**: Separated context initialization from `_enter_tree()` to avoid race conditions with model loading
 - ✅ **Model Loading Sequence**: Ensured proper initialization order: backend defines → automatic registration → model loading
-- ❌ **SIGILL Crash in Context Creation**: Model loads successfully but `llama_init_from_model` crashes with SIGILL in `ggml_graph_overhead_custom`
-- 🔍 **Debugging Status**: CPU backend registration working (1 backend), model loading working, crash occurs during context initialization
-- 🔧 **Attempted Fixes**: Disabled CPU optimizations (`-DGGML_NO_ACCELERATE`, `-march=x86-64`), minimal context params, exception handling
+- ✅ **SIGILL Crash RESOLVED**: Migrated from custom Zig build to official llama.cpp CMake build system
+- 🎯 **CMake Migration SUCCESS**: Now uses llama.cpp's proven build configuration with PIC linking
+- 🔧 **Technical Resolution**: Official CMake handles CPU instruction compatibility automatically
 
 **Recovery Options:**
 
