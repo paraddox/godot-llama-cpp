@@ -68,7 +68,7 @@ public:
     LlamaContextPool();
     ~LlamaContextPool();
     
-    bool initialize(Ref<LlamaModel> p_model, uint32_t p_pool_size = 4);
+    bool initialize(Ref<LlamaModel> p_model, uint32_t p_pool_size = 1);  // Reduced from 4 to 1 for 4GB VRAM
     void shutdown_pool();
     
     int submit_request(const String& prompt, float temperature = 0.8f, 

@@ -48,7 +48,9 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "")  # We want static libs to embed
 # Enable GPU acceleration options
 set(GGML_CUDA ON CACHE BOOL "Enable CUDA GPU support")
 set(GGML_CUDA_F16 ON CACHE BOOL "Enable 16-bit floats for CUDA calculations")
+set(GGML_CUDA_DMMV_F16 ON CACHE BOOL "Enable F16 CUDA dequantize matrix vector kernel")
 set(GGML_CUDA_FA ON CACHE BOOL "Enable CUDA FlashAttention kernels")
+set(GGML_CUDA_FORCE_MMQ ON CACHE BOOL "Force use of matrix multiply quantized kernels")
 
 # Force Position Independent Code for all targets (required for shared library linking)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

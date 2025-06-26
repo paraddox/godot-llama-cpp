@@ -13,10 +13,12 @@ LlamaContextPool::LlamaContextPool() {
     pool_size = 0;
     
     base_params = llama_context_default_params();
-    base_params.n_ctx = 2048;
-    base_params.n_batch = 512;
-    base_params.n_ubatch = 512;
+    // Optimized for 4GB VRAM - reduce memory usage significantly
+    base_params.n_ctx = 512;      // Reduced from 2048 to 512 (4x less VRAM)
+    base_params.n_batch = 128;    // Reduced from 512 to 128 (4x less VRAM)  
+    base_params.n_ubatch = 128;   // Reduced from 512 to 128 (4x less VRAM)
     base_params.no_perf = false;
+    UtilityFunctions::print(vformat("LlamaContextPool: Optimized for 4GB VRAM - n_ctx: %d, n_batch: %d", base_params.n_ctx, base_params.n_batch));
     
     int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
     base_params.n_threads = optimal_threads;

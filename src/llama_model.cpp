@@ -55,6 +55,9 @@ void LlamaModel::load_model() {
 	model_params = llama_model_default_params();
 	UtilityFunctions::print(vformat("load_model: Default params - n_gpu_layers: %d", model_params.n_gpu_layers));
 	
+	// Fix: llama_model_default_params() may return -1, reset to 0 for proper detection
+	model_params.n_gpu_layers = 0;
+	
 	// Auto-configure GPU acceleration - attempt GPU even if runtime detection fails
 	// Check both backend registration and runtime device availability
 	ggml_backend_dev_t gpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU);
@@ -72,18 +75,21 @@ void LlamaModel::load_model() {
 		}
 	}
 	
-	// Force GPU acceleration if CUDA is available
+	// Configure GPU acceleration if CUDA is available
 	if (cuda_backend_registered) {
-		// Force enable GPU layers - override any existing setting
-		UtilityFunctions::print(vformat("load_model: Before setting GPU layers: %d", model_params.n_gpu_layers));
-		model_params.n_gpu_layers = -1; // Use all available GPU layers
-		UtilityFunctions::print(vformat("load_model: After setting GPU layers: %d", model_params.n_gpu_layers));
-		UtilityFunctions::print("🚀 CUDA backend detected - forcing GPU acceleration (all layers)");
-		UtilityFunctions::print("    Note: If GPU is busy with graphics, model will gracefully fall back to CPU");
+		// Optimized for 4GB VRAM - conservative layer count to leave room for compute buffers
+		model_params.n_gpu_layers = 20; // Use 20/27 layers on GPU, keep 7 on CPU for memory safety
+		model_params.main_gpu = 0; // Use first GPU device
+		model_params.split_mode = LLAMA_SPLIT_MODE_NONE; // Use single GPU (no splitting)
+		// Optimized memory settings
+		model_params.use_mmap = true;
+		model_params.use_mlock = false;
+		model_params.check_tensors = true;
+		UtilityFunctions::print("🚀 CUDA backend detected - GPU acceleration enabled");
+		UtilityFunctions::print(vformat("GPU layers: %d/27, VRAM optimized for 4GB", model_params.n_gpu_layers));
 	} else {
 		UtilityFunctions::print("⚠️ No GPU backend available - using CPU-only mode");
 		model_params.n_gpu_layers = 0;
-		UtilityFunctions::print(vformat("load_model: Set to CPU mode - GPU layers: %d", model_params.n_gpu_layers));
 	}
 
 	String absPath = ProjectSettings::get_singleton()->globalize_path(get_path());

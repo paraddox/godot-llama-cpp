@@ -8,10 +8,10 @@ const message = preload("res://examples/simple/message.tscn")
 func _ready():
 	# Load the model if not already set
 	if llama_context.model == null:
-		print("Loading Phi-3 Mini model...")
+		print("Loading Gemma-2-2b model...")
 		var llama_model = LlamaModel.new()
 		# Set path manually without triggering resource loader
-		llama_model.set_path("res://models/Phi-3-mini-4k-instruct-q4.gguf")
+		llama_model.set_path("res://models/gemma-2-2b-it-q4_0.gguf")
 		llama_model.load_model()
 		
 		# Check if model actually loaded
