@@ -132,11 +132,11 @@ void LlamaContext::initialize_context() {
 	thread.instantiate();
 
 	// Backend is already initialized globally, no need to do it again
-	// Optimized parameters for 8GB VRAM GTX 1080
+	// Conservative parameters - match working CLI settings (713 MiB compute buffer)
 	llama_context_params production_params = llama_context_default_params();
-	production_params.n_ctx = 2048;   // Good context size for conversations
-	production_params.n_batch = 512;  // Large batch for good throughput
-	production_params.n_ubatch = 512;  // Match batch size
+	production_params.n_ctx = 256;    // Match CLI test that works
+	production_params.n_batch = 256;  // Match CLI batch size
+	production_params.n_ubatch = 256; // Match CLI ubatch size
 	
 	// Use multi-threading optimized for system (20 cores available)
 	int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());

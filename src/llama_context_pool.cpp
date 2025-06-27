@@ -13,12 +13,12 @@ LlamaContextPool::LlamaContextPool() {
     pool_size = 0;
     
     base_params = llama_context_default_params();
-    // Optimized for 8GB VRAM - generous parameters for good performance
-    base_params.n_ctx = 2048;     // Good context size for conversations
-    base_params.n_batch = 512;    // Large batch for good throughput  
-    base_params.n_ubatch = 512;   // Match batch size
+    // Conservative parameters to prevent CUDA OOM - match working CLI settings
+    base_params.n_ctx = 256;      // Match CLI test that works (713 MiB compute buffer)
+    base_params.n_batch = 256;    // Match CLI batch size  
+    base_params.n_ubatch = 256;   // Match CLI ubatch size
     base_params.no_perf = false;
-    UtilityFunctions::print(vformat("LlamaContextPool: Optimized for 8GB VRAM - n_ctx: %d, n_batch: %d", base_params.n_ctx, base_params.n_batch));
+    UtilityFunctions::print(vformat("LlamaContextPool: Conservative CUDA settings - n_ctx: %d, n_batch: %d (prevents OOM)", base_params.n_ctx, base_params.n_batch));
     
     int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
     base_params.n_threads = optimal_threads;

@@ -45,8 +45,8 @@ private:
   
   // New pool-based architecture
   LlamaContextPool* context_pool = nullptr;
-  bool use_pool = true;
-  uint32_t pool_size = 4;
+  bool use_pool = false;  // Disable pooling by default to prevent CUDA OOM
+  uint32_t pool_size = 1; // Use single context to minimize memory usage
 
 protected:
 	static void _bind_methods();
