@@ -42,8 +42,10 @@ set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
-# GPU acceleration (OFF for compatibility testing)
-set(GGML_CUDA OFF CACHE BOOL "Disable CUDA for compatibility testing")
+# GPU acceleration (disabled due to CUDA compiler crashes - can be re-enabled later)
+set(GGML_CUDA OFF CACHE BOOL "Disable CUDA due to compiler segfaults with CUDA 12.0")
+# Note: CUDA can be re-enabled when using a compatible CUDA version
+# Alternative: Use ROCm/OpenCL backends or runtime CUDA loading
 
 # Force Position Independent Code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

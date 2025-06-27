@@ -58,29 +58,36 @@ void LlamaModel::load_model() {
 	// Fix: llama_model_default_params() may return -1, reset to 0 for proper detection
 	model_params.n_gpu_layers = 0;
 	
-	// Auto-configure GPU acceleration - attempt GPU even if runtime detection fails
-	// Check both backend registration and runtime device availability
+	// Check for GPU backend availability and provide detailed feedback
 	ggml_backend_dev_t gpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU);
 	size_t backend_count = ggml_backend_reg_count();
 	bool cuda_backend_registered = false;
 	
-	// Check if CUDA backend is registered (even if runtime detection fails)
+	UtilityFunctions::print(vformat("🔍 GPU Detection Report:"));
+	UtilityFunctions::print(vformat("  - Total backends registered: %d", (int)backend_count));
+	
+	// Check if CUDA backend is registered
 	for (size_t i = 0; i < backend_count; i++) {
 		ggml_backend_reg_t reg = ggml_backend_reg_get(i);
 		const char* name = ggml_backend_reg_name(reg);
 		String backend_name = String(name).to_lower();
+		UtilityFunctions::print(vformat("  - Backend %d: %s", (int)i, name));
 		if (backend_name.contains("cuda")) {
 			cuda_backend_registered = true;
-			break;
 		}
 	}
 	
+	UtilityFunctions::print(vformat("  - CUDA backend registered: %s", cuda_backend_registered ? "YES" : "NO"));
+	UtilityFunctions::print(vformat("  - GPU device available: %s", gpu_dev != nullptr ? "YES" : "NO"));
+	
 	// Configure GPU acceleration if CUDA is available
 	if (cuda_backend_registered) {
+		UtilityFunctions::print("🚀 CUDA backend found - enabling GPU acceleration");
 		// Optimized for 4GB VRAM - conservative layer count to leave room for compute buffers
 		model_params.n_gpu_layers = 20; // Use 20/27 layers on GPU, keep 7 on CPU for memory safety
 		model_params.main_gpu = 0; // Use first GPU device
 		model_params.split_mode = LLAMA_SPLIT_MODE_NONE; // Use single GPU (no splitting)
+		UtilityFunctions::print(vformat("  - GPU layers set to: %d", model_params.n_gpu_layers));
 		// Optimized memory settings
 		model_params.use_mmap = true;
 		model_params.use_mlock = false;
@@ -88,7 +95,13 @@ void LlamaModel::load_model() {
 		UtilityFunctions::print("🚀 CUDA backend detected - GPU acceleration enabled");
 		UtilityFunctions::print(vformat("GPU layers: %d/27, VRAM optimized for 4GB", model_params.n_gpu_layers));
 	} else {
-		UtilityFunctions::print("⚠️ No GPU backend available - using CPU-only mode");
+		UtilityFunctions::print("❌ CUDA backend not available:");
+		UtilityFunctions::print("  - Extension was built without CUDA support");
+		UtilityFunctions::print("  - Reason: CUDA compiler crashes during build (CUDA 12.0 + complex kernels)");
+		UtilityFunctions::print("  - To enable GPU: rebuild with compatible CUDA toolkit version");
+		UtilityFunctions::print("  - Alternative: Use OpenCL/ROCm backends if available");
+		UtilityFunctions::print("  - Current mode: CPU-only");
+		UtilityFunctions::print("  - Performance impact: ~2-10x slower than GPU mode");
 		model_params.n_gpu_layers = 0;
 	}
 
