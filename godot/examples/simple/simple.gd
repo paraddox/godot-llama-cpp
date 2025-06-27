@@ -33,7 +33,7 @@ func handle_input(input: String) -> void:
 			return { "text": msg.text, "sender": msg.sender }
 	))
 	messages.append({"text": input, "sender": "user"})
-	var prompt = ChatFormatter.apply("phi3", messages)
+	var prompt = ChatFormatter.apply("gemma", messages)
 	print("prompt: ", prompt)
 	
 	var completion_id = llama_context.request_completion(prompt)

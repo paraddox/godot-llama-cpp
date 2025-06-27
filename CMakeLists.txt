@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
-
+cmake_minimum_required(VERSION 3.17)
 project(godot-llama-cpp LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -26,119 +25,81 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(ARCH_NAME "x86_64")
 endif()
 
-# Extension naming (without lib prefix - CMake adds it automatically)
+# Extension naming
 string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE_LOWER)
 set(EXTENSION_NAME "godot-llama-cpp-${ARCH_NAME}-${PLATFORM_NAME}-gnu-${CMAKE_BUILD_TYPE}")
 
-# Configurable output directory for final extension (equivalent to Zig's --prefix)
+# Output directory
 if(NOT DEFINED ADDON_OUTPUT_DIR)
     set(ADDON_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/godot/addons/godot-llama-cpp" CACHE PATH "Output directory for the addon")
 endif()
 
 #
-# Phase 1: llama.cpp as subdirectory (official CMake build)
+# Phase 1: Build llama.cpp using official CMake
 #
-
-# Configure llama.cpp options for our use case
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "")
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "")  # We want static libs to embed
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
-# Enable GPU acceleration options
-set(GGML_CUDA ON CACHE BOOL "Enable CUDA GPU support")
-set(GGML_CUDA_F16 ON CACHE BOOL "Enable 16-bit floats for CUDA calculations")
-set(GGML_CUDA_DMMV_F16 ON CACHE BOOL "Enable F16 CUDA dequantize matrix vector kernel")
-set(GGML_CUDA_FA ON CACHE BOOL "Enable CUDA FlashAttention kernels")
-set(GGML_CUDA_FORCE_MMQ ON CACHE BOOL "Force use of matrix multiply quantized kernels")
+# GPU acceleration (OFF for compatibility testing)
+set(GGML_CUDA OFF CACHE BOOL "Disable CUDA for compatibility testing")
 
-# Force Position Independent Code for all targets (required for shared library linking)
+# Force Position Independent Code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Add llama.cpp - this creates 'ggml' and 'llama' targets
 add_subdirectory(llama.cpp)
 
 #
-# Phase 2: Generate Godot bindings and build godot-cpp
+# Phase 2: Build godot-cpp using OFFICIAL method
 #
-
-# Generate bindings first
-find_package(Python3 REQUIRED)
-add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/gen/include/godot_cpp/classes/global_constants.hpp
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/binding_generator.py 
-            ${CMAKE_SOURCE_DIR}/godot_cpp/gdextension/extension_api.json
-            ${CMAKE_BINARY_DIR}
-    DEPENDS ${CMAKE_SOURCE_DIR}/binding_generator.py 
-            ${CMAKE_SOURCE_DIR}/godot_cpp/gdextension/extension_api.json
-    COMMENT "Generating Godot C++ bindings"
-)
-
-# Custom target to ensure bindings are generated
-add_custom_target(generate_bindings
-    DEPENDS ${CMAKE_BINARY_DIR}/gen/include/godot_cpp/classes/global_constants.hpp
-)
-
-# Collect godot-cpp source files (both original and generated)
-file(GLOB_RECURSE GODOT_CPP_SOURCES 
-    "godot_cpp/src/*.cpp"
-    "godot_cpp/src/*.c"
-)
-
-# Collect generated binding sources
-file(GLOB_RECURSE GODOT_CPP_GENERATED_SOURCES 
-    "${CMAKE_BINARY_DIR}/gen/src/*.cpp"
-    "${CMAKE_BINARY_DIR}/gen/src/*.c"
-)
-
-# Create godot-cpp static library
-add_library(godot-cpp STATIC ${GODOT_CPP_SOURCES} ${GODOT_CPP_GENERATED_SOURCES})
-add_dependencies(godot-cpp generate_bindings)
-
-target_include_directories(godot-cpp PRIVATE
-    godot_cpp/gdextension
-    godot_cpp/include
-    ${CMAKE_BINARY_DIR}/gen/include
-)
-
-target_compile_options(godot-cpp PRIVATE
-    -std=c++17
-    -fno-exceptions
-)
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_definitions(godot-cpp PRIVATE DEBUG_ENABLED)
-endif()
+set(GODOT_PROJECT_DIR "${CMAKE_SOURCE_DIR}/godot" CACHE STRING "")
+add_subdirectory(godot_cpp)
 
 #
-# Phase 3: Build our extension
+# Phase 3: Build our extension using OFFICIAL patterns
 #
-
-# Collect our source files
 file(GLOB_RECURSE EXTENSION_SOURCES "src/*.cpp" "src/*.c")
 
-# Create the main extension shared library
 add_library(${EXTENSION_NAME} SHARED ${EXTENSION_SOURCES})
 
-# Link against llama.cpp's official targets and our godot-cpp
+# CRITICAL: Use exact same target linking as official test
 target_link_libraries(${EXTENSION_NAME} PRIVATE
-    llama      # Official llama.cpp target
-    ggml       # Official ggml target  
-    godot-cpp  # Our godot-cpp build
+    godot-cpp::template_release  # Use official godot-cpp target!
+    llama
+    ggml
 )
 
-# Link CUDA backend if CUDA is enabled
-if(GGML_CUDA)
-    target_link_libraries(${EXTENSION_NAME} PRIVATE ggml-cuda)
-    target_compile_definitions(${EXTENSION_NAME} PRIVATE GGML_USE_CUDA)
-    message(STATUS "🚀 CUDA backend linked and GGML_USE_CUDA defined - GPU acceleration enabled")
-endif()
+# CRITICAL: Use exact same compiler flags as official test
+target_compile_features(${EXTENSION_NAME} PUBLIC cxx_std_17)
+
+target_compile_options(${EXTENSION_NAME} PRIVATE
+    # CRITICAL: Disable exceptions (matches official build)
+    -fno-exceptions
+    # CRITICAL: Symbol visibility
+    -fvisibility=hidden
+    # CRITICAL: Position independent code
+    -fPIC
+)
+
+# CRITICAL: Use exact same properties as official test
+set_target_properties(${EXTENSION_NAME} PROPERTIES
+    CXX_STANDARD 17
+    CXX_EXTENSIONS OFF
+    CXX_VISIBILITY_PRESET hidden
+    
+    POSITION_INDEPENDENT_CODE ON
+    BUILD_RPATH_USE_ORIGIN ON
+    
+    # Note: Removed aggressive static linking that was causing libgcc_s linking issues
+    
+    PREFIX "lib"
+    LIBRARY_OUTPUT_DIRECTORY "${ADDON_OUTPUT_DIR}/lib"
+    RUNTIME_OUTPUT_DIRECTORY "${ADDON_OUTPUT_DIR}/lib"
+)
 
 target_include_directories(${EXTENSION_NAME} PRIVATE
     src
-    godot_cpp/gdextension
-    godot_cpp/include
-    ${CMAKE_BINARY_DIR}/gen/include
     llama.cpp/include
     llama.cpp/src
     llama.cpp/common
@@ -148,57 +109,13 @@ target_include_directories(${EXTENSION_NAME} PRIVATE
 
 # Platform-specific settings
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_compile_definitions(${EXTENSION_NAME} PRIVATE
-        _GNU_SOURCE
-    )
-    # Link required system libraries
+    target_compile_definitions(${EXTENSION_NAME} PRIVATE _GNU_SOURCE)
     target_link_libraries(${EXTENSION_NAME} PRIVATE pthread dl)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    target_compile_definitions(${EXTENSION_NAME} PRIVATE
-        _DARWIN_C_SOURCE
-    )
 endif()
 
-# Use C++17 standard
-target_compile_features(${EXTENSION_NAME} PRIVATE cxx_std_17)
-
-#
-# Phase 4: Installation
-#
-
-# Create addon directory structure
-add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory 
-            ${ADDON_OUTPUT_DIR}/lib
-    COMMENT "Creating addon directory structure"
-)
-
-# Copy built extension to addon directory
-add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy 
-            $<TARGET_FILE:${EXTENSION_NAME}>
-            ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>
-    COMMENT "Installing extension to addon directory"
-)
-
-# Print success message
+# CRITICAL: Success message
 add_custom_command(TARGET ${EXTENSION_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo 
-            "✅ Extension built successfully: ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>"
-    COMMENT "Build complete"
-)
-
-# Add install target for convenience
-add_custom_target(install-extension
-    DEPENDS ${EXTENSION_NAME}
-    COMMENT "Ensure extension is built and copied to addon directory"
-)
-
-# Add force-install target that always copies existing libraries  
-add_custom_target(force-install
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${ADDON_OUTPUT_DIR}/lib
-    COMMAND ${CMAKE_COMMAND} -E echo "Force copying libraries to ${ADDON_OUTPUT_DIR}/lib/..."
-    COMMAND bash -c "cp ${CMAKE_BINARY_DIR}/libgodot-llama-cpp-*.so ${ADDON_OUTPUT_DIR}/lib/ || echo 'No libraries found to copy'"
-    COMMAND ${CMAKE_COMMAND} -E echo "✅ Force copy complete"
-    COMMENT "Force copy existing libraries to addon directory"
+            "✅ FIXED Extension built: ${ADDON_OUTPUT_DIR}/lib/$<TARGET_FILE_NAME:${EXTENSION_NAME}>"
+    COMMENT "Build complete with official patterns"
 )

@@ -15,6 +15,10 @@ run/main_scene="res://examples/simple/simple.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
 
+[dotnet]
+
+project/assembly_name="godot-llama-cpp"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/godot-llama-cpp/plugin.cfg")

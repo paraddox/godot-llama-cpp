@@ -7,7 +7,7 @@ func _initialize():
 	var model = LlamaModel.new()
 	print("Model created")
 	
-	model.set_path("godot/models/Phi-3-mini-4k-instruct-q4.gguf")
+	model.set_path("models/gemma-2-2b-it-q4_0.gguf")
 	print("Path set")
 	
 	print("About to call load_model()...")
