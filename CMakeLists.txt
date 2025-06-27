@@ -42,10 +42,10 @@ set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
-# GPU acceleration (disabled due to CUDA compiler crashes - can be re-enabled later)
-set(GGML_CUDA OFF CACHE BOOL "Disable CUDA due to compiler segfaults with CUDA 12.0")
-# Note: CUDA can be re-enabled when using a compatible CUDA version
-# Alternative: Use ROCm/OpenCL backends or runtime CUDA loading
+# GPU acceleration - CUDA enabled for GTX 1080
+set(GGML_CUDA ON CACHE BOOL "Enable CUDA for GPU acceleration")
+set(CMAKE_CUDA_ARCHITECTURES "61" CACHE STRING "GTX 1080 architecture")
+# GTX 1080 = Compute Capability 6.1
 
 # Force Position Independent Code
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
