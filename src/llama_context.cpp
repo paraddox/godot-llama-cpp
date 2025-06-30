@@ -134,11 +134,11 @@ void LlamaContext::initialize_context() {
 	// No legacy Godot threading objects needed - using std::thread
 
 	// Backend is already initialized globally, no need to do it again
-	// Extreme minimal parameters to fit in remaining VRAM after model loading
+	// Balanced parameters for GTX 1080 8GB VRAM
 	llama_context_params production_params = llama_context_default_params();
-	production_params.n_ctx = 64;     // Extremely minimal context for testing
-	production_params.n_batch = 16;   // Tiny batch to minimize compute buffer
-	production_params.n_ubatch = 16;  // Match batch size
+	production_params.n_ctx = 512;    // Reasonable context size
+	production_params.n_batch = 64;   // Moderate batch size
+	production_params.n_ubatch = 64;  // Match batch size
 	
 	// Use multi-threading optimized for system (20 cores available)
 	int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
@@ -258,7 +258,7 @@ void LlamaContext::_process_completions() {
 			}
 			
 			// Process one batch per frame
-			const int max_batch_size = 16;
+			const int max_batch_size = 8;  // Smaller batches to avoid KV cache issues
 			if (batch_start_idx < request_tokens.size()) {
 				size_t chunk_size = std::min((size_t)max_batch_size, request_tokens.size() - batch_start_idx);
 				
@@ -295,8 +295,11 @@ void LlamaContext::_process_completions() {
 				bool is_final_chunk = (batch_start_idx + chunk_size >= request_tokens.size());
 				
 				UtilityFunctions::print("Calling llama_decode...");
-				if (llama_decode(ctx, chunk_batch) != 0) {
-					_emit_completion_response(current_request.id, "llama_decode() failed", true);
+				int decode_result = llama_decode(ctx, chunk_batch);
+				if (decode_result != 0) {
+					// Context is full, complete the processing with error
+					UtilityFunctions::print("llama_decode failed (KV cache full), ending completion...");
+					_emit_completion_response(current_request.id, "Context memory full", true);
 					processing_state = IDLE;
 					return;
 				}
@@ -366,8 +369,12 @@ void LlamaContext::_process_completions() {
 			llama_batch new_batch = llama_batch_get_one(&new_token_id, 1);
 			curr_token_pos++;
 			
-			if (llama_decode(ctx, new_batch) != 0) {
-				_emit_completion_response(current_request.id, "llama_decode() failed", true);
+			int decode_result = llama_decode(ctx, new_batch);
+			if (decode_result != 0) {
+				// Context is full, complete the generation
+				UtilityFunctions::print("Generation llama_decode failed (context full), ending generation...");
+				_emit_completion_response(current_request.id, "", true);
+				llama_sampler_reset(sampler);
 				processing_state = IDLE;
 				return;
 			}
