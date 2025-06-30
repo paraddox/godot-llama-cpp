@@ -134,9 +134,9 @@ void LlamaContext::initialize_context() {
 	// No legacy Godot threading objects needed - using std::thread
 
 	// Backend is already initialized globally, no need to do it again
-	// Balanced parameters for GTX 1080 8GB VRAM - 1024 token context
+	// Optimized for single prompt-response usage (no conversation history needed)
 	llama_context_params production_params = llama_context_default_params();
-	production_params.n_ctx = 1024;   // Practical context size (2x increase from 512)
+	production_params.n_ctx = 1024;   // Good capacity for single prompt-response
 	production_params.n_batch = 128;  // Efficient batch size
 	production_params.n_ubatch = 128; // Match batch size
 	
@@ -203,6 +203,11 @@ void LlamaContext::_process_completions() {
 				return;
 			}
 			
+			// Clear KV cache for fresh single-shot context
+			if (ctx) {
+				llama_kv_self_seq_rm(ctx, 0, -1, -1);
+			}
+			
 			// Tokenize the prompt
 			const char* text = current_request.prompt.c_str();
 			int text_len = current_request.prompt.length();
@@ -227,20 +232,9 @@ void LlamaContext::_process_completions() {
 			}
 			request_tokens.resize(n_tokens);
 			
-			// Find shared prefix and prepare for batch processing
-			size_t shared_prefix_idx = 0;
-			auto diff = std::mismatch(context_tokens.begin(), context_tokens.end(), 
-			                         request_tokens.begin(), request_tokens.end());
-			if (diff.first != context_tokens.end()) {
-				shared_prefix_idx = std::distance(context_tokens.begin(), diff.first);
-			} else {
-				shared_prefix_idx = std::min(context_tokens.size(), request_tokens.size());
-			}
-			
-			context_tokens.erase(context_tokens.begin() + shared_prefix_idx, context_tokens.end());
-			request_tokens.erase(request_tokens.begin(), request_tokens.begin() + shared_prefix_idx);
-			
-			curr_token_pos = context_tokens.size();
+			// For single-shot usage: always start fresh (no shared prefix optimization)
+			context_tokens.clear();
+			curr_token_pos = 0;
 			batch_start_idx = 0;
 			processing_state = PROCESSING_BATCH;
 			break;
@@ -300,6 +294,9 @@ void LlamaContext::_process_completions() {
 					// Context is full, complete the processing with error
 					UtilityFunctions::print("llama_decode failed (KV cache full), ending completion...");
 					_emit_completion_response(current_request.id, "Context memory full", true);
+					// Clear context for next single-shot prompt
+					context_tokens.clear();
+					curr_token_pos = 0;
 					processing_state = IDLE;
 					return;
 				}
@@ -350,6 +347,9 @@ void LlamaContext::_process_completions() {
 			if (eog || curr_eq_n_len) {
 				_emit_completion_response(current_request.id, "", true);
 				llama_sampler_reset(sampler);
+				// Clear context for next single-shot prompt (no conversation history)
+				context_tokens.clear();
+				curr_token_pos = 0;
 				processing_state = IDLE;
 				return;
 			}
@@ -375,6 +375,9 @@ void LlamaContext::_process_completions() {
 				UtilityFunctions::print("Generation llama_decode failed (context full), ending generation...");
 				_emit_completion_response(current_request.id, "", true);
 				llama_sampler_reset(sampler);
+				// Clear context for next single-shot prompt
+				context_tokens.clear();
+				curr_token_pos = 0;
 				processing_state = IDLE;
 				return;
 			}
