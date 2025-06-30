@@ -5,6 +5,13 @@
 #include "../llama.cpp/common/common.h"
 #include "llama_model.h"
 #include "llama_context_pool.h"
+#include <string>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <thread>
+#include <functional>
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/semaphore.hpp>
@@ -15,8 +22,16 @@ namespace godot {
 
 struct completion_request {
 	int id;
-	String prompt;
+	std::string prompt;  // Use std::string to avoid Godot String in background thread
 };
+
+struct completion_response {
+	int id;
+	std::string text;  // Use std::string to avoid Godot String in background thread
+	bool done;
+};
+
+// Single-threaded completion processing - all on main thread
 
 class LlamaContext : public Node {
 	GDCLASS(LlamaContext, Node);
@@ -34,14 +49,25 @@ private:
   float penalty_present = 0.0f;
   int32_t n_len = 1024;
 	int request_id = 0;
-	Vector<completion_request> completion_requests;
 
-	// Legacy threading (kept for compatibility)
-	Ref<Thread> thread;
-	Ref<Semaphore> semaphore;
-	Ref<Mutex> mutex;
-  std::vector<llama_token> context_tokens;
-  bool exit_thread = false;
+	// Single-threaded polling architecture (NO background threads)
+	std::queue<completion_request> request_queue;
+	std::vector<llama_token> context_tokens;
+	
+	// Current processing state
+	enum ProcessingState {
+		IDLE,
+		TOKENIZING,
+		PROCESSING_BATCH,
+		GENERATING
+	} processing_state = IDLE;
+	
+	// Current request being processed
+	completion_request current_request;
+	std::vector<llama_token> request_tokens;
+	size_t batch_start_idx = 0;
+	int curr_token_pos = 0;
+	bool generation_complete = false;
   
   // New pool-based architecture
   LlamaContextPool* context_pool = nullptr;
@@ -57,7 +83,13 @@ public:
 	
 	void initialize_context();
 	int request_completion(const String &prompt);
-	void __thread_loop();
+	
+	// Main thread processing (called periodically by Godot)
+	void _process_completions();
+	
+	// Thread-safe helper functions (called from main thread)
+	void _emit_completion_response(int id, const String& text, bool done);
+	void _emit_error_response(int id, const String& error);
 	
 	// Pool management
 	void set_use_pool(bool enabled);
@@ -82,6 +114,7 @@ public:
 
 	virtual PackedStringArray _get_configuration_warnings() const override;
 	virtual void _enter_tree() override;
+	virtual void _process(double delta) override;
   virtual void _exit_tree() override;
 	LlamaContext();
 };

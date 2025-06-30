@@ -48,7 +48,8 @@ void LlamaContext::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("initialize_context"), &LlamaContext::initialize_context);
 	ClassDB::bind_method(D_METHOD("request_completion", "prompt"), &LlamaContext::request_completion);
-	ClassDB::bind_method(D_METHOD("__thread_loop"), &LlamaContext::__thread_loop);
+	ClassDB::bind_method(D_METHOD("_emit_completion_response", "id", "text", "done"), &LlamaContext::_emit_completion_response);
+	ClassDB::bind_method(D_METHOD("_emit_error_response", "id", "error"), &LlamaContext::_emit_error_response);
 
 	ClassDB::bind_method(D_METHOD("set_use_pool", "enabled"), &LlamaContext::set_use_pool);
 	ClassDB::bind_method(D_METHOD("get_use_pool"), &LlamaContext::get_use_pool);
@@ -85,6 +86,9 @@ void LlamaContext::_enter_tree() {
 		return;
 	}
 
+	// Enable processing to handle response queue
+	set_process(true);
+	
 	// Don't initialize here - wait for explicit call after model is loaded
 	// This avoids the race condition where model isn't ready yet
 }
@@ -127,16 +131,14 @@ void LlamaContext::initialize_context() {
 		}
 	}
 
-	mutex.instantiate();
-	semaphore.instantiate();
-	thread.instantiate();
+	// No legacy Godot threading objects needed - using std::thread
 
 	// Backend is already initialized globally, no need to do it again
-	// Conservative parameters - match working CLI settings (713 MiB compute buffer)
+	// Extreme minimal parameters to fit in remaining VRAM after model loading
 	llama_context_params production_params = llama_context_default_params();
-	production_params.n_ctx = 256;    // Match CLI test that works
-	production_params.n_batch = 256;  // Match CLI batch size
-	production_params.n_ubatch = 256; // Match CLI ubatch size
+	production_params.n_ctx = 64;     // Extremely minimal context for testing
+	production_params.n_batch = 16;   // Tiny batch to minimize compute buffer
+	production_params.n_ubatch = 16;  // Match batch size
 	
 	// Use multi-threading optimized for system (20 cores available)
 	int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
@@ -144,10 +146,16 @@ void LlamaContext::initialize_context() {
 	production_params.n_threads_batch = optimal_threads;
 	production_params.no_perf = false;  // Enable performance monitoring
 	
-	UtilityFunctions::print(vformat("initialize_context: Creating production context with n_ctx=%d, n_batch=%d, n_threads=%d", 
+	UtilityFunctions::print(vformat("initialize_context: Creating production context with n_ctx=%d, n_batch=%d (chunked), n_threads=%d", 
 		production_params.n_ctx, production_params.n_batch, production_params.n_threads));
-	UtilityFunctions::print("initialize_context: About to call llama_init_from_model...");
 	
+	// Verify model is loaded before creating context
+	if (model->model == nullptr) {
+		UtilityFunctions::printerr("initialize_context: CRITICAL - model->model is nullptr, cannot create context");
+		return;
+	}
+	
+	UtilityFunctions::print("initialize_context: Model verified loaded, calling llama_init_from_model...");
 	ctx = llama_init_from_model(model->model, production_params);
 	UtilityFunctions::print("initialize_context: llama_init_from_model completed successfully");
 	if (ctx == NULL) {
@@ -163,141 +171,207 @@ void LlamaContext::initialize_context() {
 
 	UtilityFunctions::print(vformat("%s: Context initialized", __func__));
 
-	thread->start(callable_mp(this, &LlamaContext::__thread_loop));
+	// No background thread initialization needed - everything runs on main thread
+	UtilityFunctions::print("initialize_context: Single-threaded polling mode enabled");
 }
 
-void LlamaContext::__thread_loop() {
-	while (true) {
-		semaphore->wait();
-
-		mutex->lock();
-		if (exit_thread) {
-			mutex->unlock();
-			break;
-		}
-		if (completion_requests.size() == 0) {
-			mutex->unlock();
-			continue;
-		}
-		completion_request req = completion_requests.get(0);
-		completion_requests.remove_at(0);
-		mutex->unlock();
-
-		UtilityFunctions::print(vformat("%s: Running completion for prompt id: %d", __func__, req.id));
-
-		std::vector<llama_token> request_tokens;
-		// Modern tokenization API
-		const char* text = req.prompt.utf8().get_data();
-		int text_len = strlen(text);
-		request_tokens.resize(text_len + 16); // Reserve space
-		const struct llama_vocab* vocab = llama_model_get_vocab(model->model);
-		int n_tokens = llama_tokenize(vocab, text, text_len, request_tokens.data(), request_tokens.size(), true, false);
-		if (n_tokens < 0) {
-			request_tokens.resize(-n_tokens);
-			n_tokens = llama_tokenize(vocab, text, text_len, request_tokens.data(), request_tokens.size(), true, false);
-		}
-		request_tokens.resize(n_tokens);
-
-		size_t shared_prefix_idx = 0;
-		auto diff = std::mismatch(context_tokens.begin(), context_tokens.end(), request_tokens.begin(), request_tokens.end());
-		if (diff.first != context_tokens.end()) {
-			shared_prefix_idx = std::distance(context_tokens.begin(), diff.first);
-		} else {
-			shared_prefix_idx = std::min(context_tokens.size(), request_tokens.size());
-		}
-
-		// Note: llama_kv_cache_seq_rm has been removed from newer llama.cpp
-		// KV cache sequence removal was deprecated in newer llama.cpp API
-		// Modern batch processing handles this automatically
-		bool rm_success = true; // Always successful with modern API
-		context_tokens.erase(context_tokens.begin() + shared_prefix_idx, context_tokens.end());
-		request_tokens.erase(request_tokens.begin(), request_tokens.begin() + shared_prefix_idx);
-
-		// Use modern batch API - create batch for all tokens at once
-		llama_batch batch = llama_batch_get_one(request_tokens.data(), request_tokens.size());
-
-		// Debug token logging removed for production
-
-		int curr_token_pos = context_tokens.size();
-		bool decode_failed = false;
-
-		// Process the batch
-		if (llama_decode(ctx, batch) != 0) {
-			decode_failed = true;
-		}
-		curr_token_pos += batch.n_tokens;
-
-		// Debug batch logging removed for production
-
-		if (decode_failed) {
-			Dictionary response;
-			response["id"] = req.id;
-			response["error"] = "llama_decode() failed";
-			call_thread_safe("emit_signal", "completion_generated", response);
-			continue;
-		}
-
-		context_tokens.insert(context_tokens.end(), request_tokens.begin(), request_tokens.end());
-
-		// Track current batch for proper sampling
-		llama_batch current_batch = batch;
+// Main thread processing - called every frame by Godot
+void LlamaContext::_process_completions() {
+	// Check if there are any new requests
+	if (processing_state == IDLE && !request_queue.empty()) {
+		current_request = request_queue.front();
+		request_queue.pop();
+		processing_state = TOKENIZING;
+		batch_start_idx = 0;
+		generation_complete = false;
 		
-		while (true) {
-			if (exit_thread) {
+		UtilityFunctions::print(vformat("Starting completion for request ID: %d", current_request.id));
+	}
+	
+	// Process current request step by step
+	switch (processing_state) {
+		case IDLE:
+			// Nothing to do
+			break;
+			
+		case TOKENIZING: {
+			UtilityFunctions::print("Processing: TOKENIZING stage");
+			// Safety checks before tokenizing
+			if (model.is_null() || !model->model) {
+				_emit_completion_response(current_request.id, "Model not loaded", true);
+				processing_state = IDLE;
 				return;
 			}
-			// Modern sampling API - use current batch for sampling
-			llama_token new_token_id = llama_sampler_sample(sampler, ctx, current_batch.n_tokens - 1);
-			llama_sampler_accept(sampler, new_token_id);
-
-			Dictionary response;
-			response["id"] = req.id;
-
-			context_tokens.push_back(new_token_id);
-
-			bool eog = llama_vocab_is_eog(llama_model_get_vocab(model->model), new_token_id);
-			bool curr_eq_n_len = curr_token_pos == n_len;
-
-			if (eog || curr_eq_n_len) {
-				response["done"] = true;
-				call_thread_safe("emit_signal", "completion_generated", response);
-				break;
+			
+			// Tokenize the prompt
+			const char* text = current_request.prompt.c_str();
+			int text_len = current_request.prompt.length();
+			if (text_len == 0) {
+				_emit_completion_response(current_request.id, "Empty prompt", true);
+				processing_state = IDLE;
+				return;
 			}
-
-			// Modern token to piece API
-			char token_str[256];
+			
+			request_tokens.resize(text_len + 16);
 			const struct llama_vocab* vocab = llama_model_get_vocab(model->model);
-			int len = llama_token_to_piece(vocab, new_token_id, token_str, sizeof(token_str), 0, false);
+			if (!vocab) {
+				_emit_completion_response(current_request.id, "Failed to get vocabulary", true);
+				processing_state = IDLE;
+				return;
+			}
+			
+			int n_tokens = llama_tokenize(vocab, text, text_len, request_tokens.data(), request_tokens.size(), true, false);
+			if (n_tokens < 0) {
+				request_tokens.resize(-n_tokens);
+				n_tokens = llama_tokenize(vocab, text, text_len, request_tokens.data(), request_tokens.size(), true, false);
+			}
+			request_tokens.resize(n_tokens);
+			
+			// Find shared prefix and prepare for batch processing
+			size_t shared_prefix_idx = 0;
+			auto diff = std::mismatch(context_tokens.begin(), context_tokens.end(), 
+			                         request_tokens.begin(), request_tokens.end());
+			if (diff.first != context_tokens.end()) {
+				shared_prefix_idx = std::distance(context_tokens.begin(), diff.first);
+			} else {
+				shared_prefix_idx = std::min(context_tokens.size(), request_tokens.size());
+			}
+			
+			context_tokens.erase(context_tokens.begin() + shared_prefix_idx, context_tokens.end());
+			request_tokens.erase(request_tokens.begin(), request_tokens.begin() + shared_prefix_idx);
+			
+			curr_token_pos = context_tokens.size();
+			batch_start_idx = 0;
+			processing_state = PROCESSING_BATCH;
+			break;
+		}
+		
+		case PROCESSING_BATCH: {
+			UtilityFunctions::print(vformat("Processing: PROCESSING_BATCH stage, batch_start_idx=%d, request_tokens.size()=%d", 
+				(int)batch_start_idx, (int)request_tokens.size()));
+			
+			// Safety checks before batch processing
+			if (!ctx) {
+				_emit_completion_response(current_request.id, "Context not initialized", true);
+				processing_state = IDLE;
+				return;
+			}
+			
+			// Process one batch per frame
+			const int max_batch_size = 16;
+			if (batch_start_idx < request_tokens.size()) {
+				size_t chunk_size = std::min((size_t)max_batch_size, request_tokens.size() - batch_start_idx);
+				
+				UtilityFunctions::print(vformat("Creating batch: chunk_size=%d, data_offset=%d", 
+					(int)chunk_size, (int)batch_start_idx));
+				
+				if (chunk_size == 0 || request_tokens.empty()) {
+					_emit_completion_response(current_request.id, "Invalid batch size", true);
+					processing_state = IDLE;
+					return;
+				}
+				
+				// Extra safety: check bounds before creating batch
+				if (batch_start_idx + chunk_size > request_tokens.size()) {
+					_emit_completion_response(current_request.id, "Batch bounds exceeded", true);
+					processing_state = IDLE;
+					return;
+				}
+				
+				UtilityFunctions::print("Calling llama_batch_get_one...");
+				llama_batch chunk_batch = llama_batch_get_one(request_tokens.data() + batch_start_idx, chunk_size);
+				UtilityFunctions::print(vformat("Batch created: n_tokens=%d", chunk_batch.n_tokens));
+				
+				// Validate batch 
+				if (chunk_batch.n_tokens <= 0 || chunk_batch.n_tokens != chunk_size) {
+					_emit_completion_response(current_request.id, "Invalid batch created", true);
+					processing_state = IDLE;
+					return;
+				}
+				
+				// Note: llama_batch_get_one() sets logits=nullptr by design
+				// We don't need to manually set logits flags for this helper function
+				
+				bool is_final_chunk = (batch_start_idx + chunk_size >= request_tokens.size());
+				
+				UtilityFunctions::print("Calling llama_decode...");
+				if (llama_decode(ctx, chunk_batch) != 0) {
+					_emit_completion_response(current_request.id, "llama_decode() failed", true);
+					processing_state = IDLE;
+					return;
+				}
+				UtilityFunctions::print("llama_decode succeeded");
+				
+				curr_token_pos += chunk_batch.n_tokens;
+				batch_start_idx += chunk_size;
+				
+				UtilityFunctions::print(vformat("Batch processed: curr_token_pos=%d, new_batch_start_idx=%d", 
+					curr_token_pos, (int)batch_start_idx));
+				
+				if (is_final_chunk) {
+					UtilityFunctions::print("Final chunk processed, moving to GENERATING stage");
+					context_tokens.insert(context_tokens.end(), request_tokens.begin(), request_tokens.end());
+					processing_state = GENERATING;
+				}
+			} else {
+				UtilityFunctions::print("All batches processed, but no final chunk detected - this shouldn't happen");
+				processing_state = GENERATING;
+			}
+			break;
+		}
+		
+		case GENERATING: {
+			UtilityFunctions::print(vformat("Processing: GENERATING stage, curr_token_pos=%d", curr_token_pos));
+			// Safety checks before generation
+			if (!ctx || !sampler || model.is_null() || !model->model) {
+				_emit_completion_response(current_request.id, "Generation context not ready", true);
+				processing_state = IDLE;
+				return;
+			}
+			
+			// Generate one token per frame
+			llama_token new_token_id = llama_sampler_sample(sampler, ctx, -1);
+			llama_sampler_accept(sampler, new_token_id);
+			context_tokens.push_back(new_token_id);
+			
+			const struct llama_vocab* vocab = llama_model_get_vocab(model->model);
+			if (!vocab) {
+				_emit_completion_response(current_request.id, "Failed to get vocabulary for generation", true);
+				processing_state = IDLE;
+				return;
+			}
+			
+			bool eog = llama_vocab_is_eog(vocab, new_token_id);
+			bool curr_eq_n_len = curr_token_pos >= n_len;
+			
+			if (eog || curr_eq_n_len) {
+				_emit_completion_response(current_request.id, "", true);
+				llama_sampler_reset(sampler);
+				processing_state = IDLE;
+				return;
+			}
+			
+			// Convert token to text
+			char token_str[256];
+			const struct llama_vocab* token_vocab = llama_model_get_vocab(model->model);
+			int len = llama_token_to_piece(token_vocab, new_token_id, token_str, sizeof(token_str), 0, false);
 			if (len > 0) {
 				token_str[len] = '\0';
-				response["text"] = String(token_str);
+				_emit_completion_response(current_request.id, String(token_str), false);
 			} else {
-				response["text"] = "";
+				_emit_completion_response(current_request.id, "", false);
 			}
-			response["done"] = false;
-			call_thread_safe("emit_signal", "completion_generated", response);
-
-			// Create new batch for single token generation
+			
+			// Prepare for next token
 			llama_batch new_batch = llama_batch_get_one(&new_token_id, 1);
-			current_batch = new_batch;  // Update current batch for next iteration
-
 			curr_token_pos++;
-
-			if (llama_decode(ctx, current_batch) != 0) {
-				decode_failed = true;
-				break;
+			
+			if (llama_decode(ctx, new_batch) != 0) {
+				_emit_completion_response(current_request.id, "llama_decode() failed", true);
+				processing_state = IDLE;
+				return;
 			}
-		}
-
-		// Reset sampler state for modern API
-		llama_sampler_reset(sampler);
-
-		if (decode_failed) {
-			Dictionary response;
-			response["id"] = req.id;
-			response["error"] = "llama_decode() failed";
-			call_thread_safe("emit_signal", "completion_generated", response);
-			continue;
+			break;
 		}
 	}
 }
@@ -310,16 +384,36 @@ PackedStringArray LlamaContext::_get_configuration_warnings() const {
 	return warnings;
 }
 
+// Main thread processing - called every frame by Godot
+void LlamaContext::_process(double delta) {
+	_process_completions();
+}
+
+// Thread-safe helper functions (called from main thread via call_deferred)
+void LlamaContext::_emit_completion_response(int id, const String& text, bool done) {
+	Dictionary response;
+	response["id"] = id;
+	response["text"] = text;
+	response["done"] = done;
+	emit_signal("completion_generated", response);
+}
+
+void LlamaContext::_emit_error_response(int id, const String& error) {
+	Dictionary response;
+	response["id"] = id;
+	response["error"] = error;
+	emit_signal("completion_generated", response);
+}
+
 int LlamaContext::request_completion(const String &prompt) {
 	// Use pool if available
 	if (use_pool && context_pool) {
 		return context_pool->submit_request(prompt, temperature, top_p, n_len);
 	}
 	
-	// Fall back to legacy single-context mode
 	// Check if context is properly initialized
-	if (!mutex.is_valid() || !semaphore.is_valid() || !ctx) {
-		UtilityFunctions::printerr(vformat("%s: Context not initialized - model may be null or failed to load", __func__));
+	if (!ctx) {
+		UtilityFunctions::printerr(vformat("%s: Context not initialized - llama_init_from_model failed (ctx is null)", __func__));
 		return -1;
 	}
 
@@ -327,12 +421,9 @@ int LlamaContext::request_completion(const String &prompt) {
 
 	UtilityFunctions::print(vformat("%s: Requesting completion for prompt id: %d", __func__, id));
 
-	mutex->lock();
-	completion_request req = { id, prompt };
-	completion_requests.append(req);
-	mutex->unlock();
-
-	semaphore->post();
+	// Queue request using simple main-thread queue
+	completion_request req = { id, std::string(prompt.utf8().get_data()) };
+	request_queue.push(req);
 
 	return id;
 }
@@ -412,16 +503,8 @@ void LlamaContext::_exit_tree() {
 		context_pool = nullptr;
 	}
 
-	// Only cleanup legacy resources if initialization succeeded
-	if (mutex.is_valid() && semaphore.is_valid() && thread.is_valid()) {
-		mutex->lock();
-		exit_thread = true;
-		mutex->unlock();
-
-		semaphore->post();
-
-		thread->wait_to_finish();
-	}
+	// Reset processing state
+	processing_state = IDLE;
 
 	if (ctx) {
 		llama_free(ctx);

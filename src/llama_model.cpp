@@ -83,8 +83,8 @@ void LlamaModel::load_model() {
 	// Configure GPU acceleration if CUDA is available
 	if (cuda_backend_registered) {
 		UtilityFunctions::print("🚀 CUDA backend found - enabling GPU acceleration");
-		// Optimized for 4GB VRAM - conservative layer count to leave room for compute buffers
-		model_params.n_gpu_layers = 20; // Use 20/27 layers on GPU, keep 7 on CPU for memory safety
+		// Reduced GPU layers to free VRAM for compute buffers (GTX 1080 has 8GB total)
+		model_params.n_gpu_layers = 15; // Use 15/27 layers on GPU, keep 12 on CPU for memory safety
 		model_params.main_gpu = 0; // Use first GPU device
 		model_params.split_mode = LLAMA_SPLIT_MODE_NONE; // Use single GPU (no splitting)
 		UtilityFunctions::print(vformat("  - GPU layers set to: %d", model_params.n_gpu_layers));
@@ -93,7 +93,7 @@ void LlamaModel::load_model() {
 		model_params.use_mlock = false;
 		model_params.check_tensors = true;
 		UtilityFunctions::print("🚀 CUDA backend detected - GPU acceleration enabled");
-		UtilityFunctions::print(vformat("GPU layers: %d/27, VRAM optimized for 4GB", model_params.n_gpu_layers));
+		UtilityFunctions::print(vformat("GPU layers: %d/27, VRAM optimized for 8GB GTX 1080", model_params.n_gpu_layers));
 	} else {
 		UtilityFunctions::print("❌ CUDA backend not available:");
 		UtilityFunctions::print("  - Extension was built without CUDA support");
