@@ -134,11 +134,11 @@ void LlamaContext::initialize_context() {
 	// No legacy Godot threading objects needed - using std::thread
 
 	// Backend is already initialized globally, no need to do it again
-	// Balanced parameters for GTX 1080 8GB VRAM
+	// Balanced parameters for GTX 1080 8GB VRAM - 1024 token context
 	llama_context_params production_params = llama_context_default_params();
-	production_params.n_ctx = 512;    // Reasonable context size
-	production_params.n_batch = 64;   // Moderate batch size
-	production_params.n_ubatch = 64;  // Match batch size
+	production_params.n_ctx = 1024;   // Practical context size (2x increase from 512)
+	production_params.n_batch = 128;  // Efficient batch size
+	production_params.n_ubatch = 128; // Match batch size
 	
 	// Use multi-threading optimized for system (20 cores available)
 	int32_t optimal_threads = std::min(16, (int)OS::get_singleton()->get_processor_count());
@@ -258,7 +258,7 @@ void LlamaContext::_process_completions() {
 			}
 			
 			// Process one batch per frame
-			const int max_batch_size = 8;  // Smaller batches to avoid KV cache issues
+			const int max_batch_size = 32;  // Moderate batches for 1024 context
 			if (batch_start_idx < request_tokens.size()) {
 				size_t chunk_size = std::min((size_t)max_batch_size, request_tokens.size() - batch_start_idx);
 				
